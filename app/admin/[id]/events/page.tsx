@@ -530,6 +530,26 @@ export default function AgendaPage() {
         {/* Color bar top */}
         <div className={`h-1 ${typeColors[typeKey]}`} />
 
+        {/* User status banner */}
+        {event.myStatus === "confirmed" && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border-b border-emerald-500/10">
+            <Check className="w-3 h-3 text-emerald-400" />
+            <span className="text-[11px] text-emerald-400 font-medium">Presença confirmada</span>
+          </div>
+        )}
+        {event.myStatus === "maybe" && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/10">
+            <HelpCircle className="w-3 h-3 text-amber-400" />
+            <span className="text-[11px] text-amber-400 font-medium">Talvez</span>
+          </div>
+        )}
+        {event.myStatus === "declined" && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-red-500/10 border-b border-red-500/10">
+            <XCircle className="w-3 h-3 text-red-400" />
+            <span className="text-[11px] text-red-400 font-medium">Presença recusada</span>
+          </div>
+        )}
+
         <div className="p-4">
           <div className="flex items-start gap-4">
             {/* Date block */}
