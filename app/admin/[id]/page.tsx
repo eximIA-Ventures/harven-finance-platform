@@ -32,8 +32,8 @@ export default async function EvaluationDetailPage({
   const candidateCount = evaluation.candidates.length;
   const teamCount = evaluation.teams.length;
   const evaluatorCount = evaluation.evaluators.length;
-  const submitted = evaluation.candidates.filter((c) => c.status === "submitted").length;
-  const evaluated = evaluation.candidates.filter((c) => c.status === "evaluated" || c.status === "completed").length;
+  const submitted = evaluation.candidates.filter((c: { status: string }) => c.status === "submitted").length;
+  const evaluated = evaluation.candidates.filter((c: { status: string }) => c.status === "evaluated" || c.status === "completed").length;
 
   const stats = [
     { value: candidateCount, label: "Candidatos", iconBg: "bg-accent/15", iconColor: "text-accent", icon: <Users size={20} /> },
@@ -137,14 +137,14 @@ export default async function EvaluationDetailPage({
       <section>
         <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-dim mb-4">Fases da Avaliação</h2>
         <div className="flex gap-3">
-          {evaluation.phases.map((phase) => (
+          {evaluation.phases.map((phase: { id: string; name: string; weight: number; sections: { criteria: unknown[] }[] }) => (
             <div key={phase.id} className="flex-1 rounded-xl ring-1 ring-[var(--border-color)] bg-bg-card p-5 transition-all hover:ring-accent/20">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-sm font-semibold text-cream">{phase.name}</span>
                 <span className="text-xs font-mono text-accent">{(phase.weight * 100).toFixed(0)}%</span>
               </div>
               <p className="text-[10px] text-dim">
-                {phase.sections.length} seções · {phase.sections.reduce((a, s) => a + s.criteria.length, 0)} critérios
+                {phase.sections.length} seções · {phase.sections.reduce((a: number, s: { criteria: unknown[] }) => a + s.criteria.length, 0)} critérios
               </p>
             </div>
           ))}
