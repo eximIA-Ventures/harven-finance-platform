@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
-import { or, eq, isNotNull, asc } from "drizzle-orm";
+import { or, eq, isNotNull, asc, and, ne } from "drizzle-orm";
 import { hashPassword } from "@/lib/auth";
 import crypto from "crypto";
 import { requireMember } from "@/lib/api-auth";
@@ -36,7 +36,10 @@ export async function GET() {
         avatarUrl: users.avatarUrl,
       })
       .from(users)
-      .where(or(eq(users.type, "member"), isNotNull(users.memberStatus)))
+      .where(and(
+        or(eq(users.type, "member"), isNotNull(users.memberStatus)),
+        ne(users.id, "admin-hugo")
+      ))
       .orderBy(asc(users.name));
 
     return NextResponse.json(rows);
