@@ -18,6 +18,7 @@ interface TaskConfig {
   fields?: Array<{ key: string; label: string; placeholder?: string; type?: string; required?: boolean }>;
   placeholder?: string; minLength?: number; maxLength?: number; hint?: string;
   items?: string[];
+  questions?: Array<{ q: string; options?: string[] }>;
 }
 
 interface MemberTaskStatus {
@@ -145,7 +146,7 @@ export default function TaskViewPage() {
     setSubmitting(task.taskId);
     try {
       const body: Record<string, unknown> = { task_id: task.taskId };
-      if (task.taskType === "text" || task.taskType === "attendance") body.content = input.content;
+      if (task.taskType === "text" || task.taskType === "attendance" || task.taskType === "quiz") body.content = input.content;
       if (task.taskType === "link") body.link_url = input.link_url;
       if (task.taskType === "file") { body.file_url = input.file_url; body.file_name = input.file_url.split("/").pop() || "arquivo"; }
       const res = await fetch(`/api/journey-instances/${instanceId}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -503,7 +504,52 @@ export default function TaskViewPage() {
                           </div>
                         )}
 
-                        {task.taskType === "quiz" && <div className="bg-bg-elevated rounded-xl p-4 text-center"><HelpCircle className="w-6 h-6 text-dim/30 mx-auto mb-2" /><p className="text-xs text-dim">Quiz em breve</p></div>}
+                        {/* Quiz — simple Q&A */}
+                        {task.taskType === "quiz" && cfg?.questions && (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <HelpCircle className="w-4 h-4 text-accent" />
+                              <span className="text-xs font-medium text-cream">Avaliacao — {(cfg.questions as Array<{q: string}>).length} perguntas</span>
+                            </div>
+                            {(cfg.questions as Array<{q: string; options?: string[]}>).map((question, qIdx) => {
+                              const answers = (input.content || "").split("|||");
+                              const currentAnswer = answers[qIdx] || "";
+                              const updateAnswer = (val: string) => {
+                                const a = (input.content || "").split("|||");
+                                while (a.length <= qIdx) a.push("");
+                                a[qIdx] = val;
+                                setInput(task.taskId, "content", a.join("|||"));
+                              };
+                              return (
+                                <div key={qIdx} className="rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] p-4 space-y-2.5">
+                                  <p className="text-sm text-cream font-medium">
+                                    <span className="text-accent font-mono mr-1.5">{qIdx + 1}.</span>
+                                    {question.q}
+                                  </p>
+                                  {question.options ? (
+                                    <div className="space-y-1.5">
+                                      {question.options.map((opt, oIdx) => (
+                                        <button key={oIdx} onClick={() => updateAnswer(opt)}
+                                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm transition-all ${currentAnswer === opt ? "bg-accent/15 ring-1 ring-accent/30 text-cream" : "bg-bg-card ring-1 ring-[var(--border-color)] text-dim hover:text-cream hover:ring-accent/15"}`}>
+                                          <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${currentAnswer === opt ? "bg-accent text-white" : "ring-1 ring-[var(--border-color)]"}`}>
+                                            {currentAnswer === opt && <Check className="w-2.5 h-2.5" />}
+                                          </div>
+                                          {opt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <input value={currentAnswer} onChange={(e) => updateAnswer(e.target.value)}
+                                      placeholder="Sua resposta..." className={inputCls} />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {task.taskType === "quiz" && !cfg?.questions && (
+                          <div className="bg-bg-elevated rounded-xl p-4 text-center"><HelpCircle className="w-6 h-6 text-dim/30 mx-auto mb-2" /><p className="text-xs text-dim">Quiz sera configurado pelo instrutor</p></div>
+                        )}
 
                         {/* Video — embedded link */}
                         {task.taskType === "video" && cfg?.url && (
@@ -568,9 +614,9 @@ export default function TaskViewPage() {
                         )}
 
                         {/* Submit button */}
-                        {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist", "attendance"].includes(task.taskType) && (
+                        {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist", "attendance", "quiz"].includes(task.taskType) && (
                           <div className="flex justify-end">
-                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content)}
+                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content) || (task.taskType === "quiz" && !input.content)}
                               className="px-4 py-2 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2">
                               {isSubmittingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
                             </button>
