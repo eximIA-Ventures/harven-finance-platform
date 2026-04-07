@@ -11,14 +11,13 @@ interface DashboardData {
   events: number;
   wikiPages: number;
   journeys: number;
-  upcomingEvents: Array<{ id: string; title: string; event_type: string; start_date: string; end_date: string | null; location: string | null }>;
+  upcomingEvents: Array<{ id: string; title: string; eventType: string; startDate: string; endDate: string | null; location: string | null }>;
   activePS: Array<{ id: string; name: string; status: string; deadline: string | null }>;
 }
 
-function getEventEndTime(e: { start_date: string; end_date: string | null }): string {
-  if (e.end_date) return e.end_date;
-  // Default: 2 hours after start
-  const start = new Date(e.start_date);
+function getEventEndTime(e: { startDate: string; endDate: string | null }): string {
+  if (e.endDate) return e.endDate;
+  const start = new Date(e.startDate);
   start.setHours(start.getHours() + 2);
   return start.toISOString();
 }
@@ -27,12 +26,13 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
 
   useEffect(() => {
+    const safeJson = (r: Response) => r.ok ? r.json() : Promise.resolve([]);
     Promise.all([
-      fetch("/api/members").then((r) => r.json()).catch(() => []),
-      fetch("/api/events").then((r) => r.json()).catch(() => []),
-      fetch("/api/wiki").then((r) => r.json()).catch(() => []),
-      fetch("/api/journeys").then((r) => r.json()).catch(() => []),
-      fetch("/api/evaluations").then((r) => r.json()).catch(() => ({ evaluations: [] })),
+      fetch("/api/members").then(safeJson).catch(() => []),
+      fetch("/api/events").then(safeJson).catch(() => []),
+      fetch("/api/wiki").then(safeJson).catch(() => []),
+      fetch("/api/journeys").then(safeJson).catch(() => []),
+      fetch("/api/evaluations").then(safeJson).catch(() => []),
     ]).then(([members, events, wiki, journeys, evals]) => {
       const now = new Date().toISOString();
       setData({
@@ -42,11 +42,11 @@ export default function DashboardPage() {
         journeys: Array.isArray(journeys) ? journeys.filter((j: { status: string | null }) => j.status !== "draft").length : 0,
         upcomingEvents: Array.isArray(events)
           ? events
-              .filter((e: { start_date: string; end_date: string | null }) => getEventEndTime(e) > now)
-              .sort((a: { start_date: string }, b: { start_date: string }) => a.start_date.localeCompare(b.start_date))
+              .filter((e: { startDate: string; endDate: string | null }) => getEventEndTime(e) > now)
+              .sort((a: { startDate: string }, b: { startDate: string }) => a.startDate.localeCompare(b.startDate))
               .slice(0, 3)
           : [],
-        activePS: Array.isArray(evals) ? evals : (evals.evaluations || []),
+        activePS: Array.isArray(evals) ? evals : [],
       });
     });
   }, []);
@@ -92,7 +92,7 @@ export default function DashboardPage() {
         {data?.upcomingEvents && data.upcomingEvents.length > 0 ? (
           <div className="space-y-2">
             {data.upcomingEvents.map((e) => {
-              const startD = new Date(e.start_date);
+              const startD = new Date(e.startDate);
               const isToday = startD.toDateString() === new Date().toDateString();
               return (
                 <div key={e.id} className={`flex items-center gap-4 rounded-xl ring-1 p-4 transition-all duration-200 hover:-translate-y-0.5 ${isToday ? "ring-accent/30 bg-accent/[0.04]" : "ring-[var(--border-color)] bg-bg-card"}`}>
