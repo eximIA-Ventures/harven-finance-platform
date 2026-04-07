@@ -66,8 +66,10 @@ export async function PATCH(
 
     const { memberId } = await params;
 
-    // Users can edit their own profile; admins can edit anyone
-    if (auth.user.id !== memberId && !auth.user.permissions.includes("admin") && !auth.user.permissions.includes("manage_users")) {
+    // Users can edit their own profile; admins and diretoria can edit anyone
+    const isDiretoria = ["presidente", "vice-presidente"].includes(auth.user.memberStatus || "");
+    const canEdit = auth.user.id === memberId || auth.user.permissions.includes("admin") || auth.user.permissions.includes("manage_users") || isDiretoria;
+    if (!canEdit) {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
 
@@ -82,8 +84,8 @@ export async function PATCH(
 
     // Password reset (admin only, no email needed)
     if (body.newPassword) {
-      if (!auth.user.permissions.includes("admin") && !auth.user.permissions.includes("manage_users")) {
-        return NextResponse.json({ error: "Apenas admins podem redefinir senhas" }, { status: 403 });
+      if (!auth.user.permissions.includes("admin") && !auth.user.permissions.includes("manage_users") && !isDiretoria) {
+        return NextResponse.json({ error: "Apenas admins e diretoria podem redefinir senhas" }, { status: 403 });
       }
       if (body.newPassword.length < 6) {
         return NextResponse.json({ error: "Senha deve ter no minimo 6 caracteres" }, { status: 400 });

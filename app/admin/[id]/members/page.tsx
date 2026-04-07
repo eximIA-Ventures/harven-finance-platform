@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, ChevronRight, X, Loader2, Linkedin, Mail, GraduationCap, Calendar, Shield, UserCircle, ExternalLink, Instagram, Phone, Building2 } from "lucide-react";
+import { Plus, Search, ChevronRight, X, Loader2, Linkedin, Mail, GraduationCap, Calendar, Shield, UserCircle, ExternalLink, Instagram, Phone, Building2, Camera } from "lucide-react";
 
 interface Member {
   id: string;
@@ -549,13 +549,40 @@ export default function MembersPage() {
               </div>
 
               <div className="flex items-center gap-5 mb-6">
-                {selected.avatarUrl ? (
-                  <img src={selected.avatarUrl} alt={selected.name} className="w-20 h-20 rounded-2xl object-cover shrink-0" />
-                ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-accent/15 flex items-center justify-center text-accent font-bold text-2xl shrink-0">
-                    {selected.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
-                  </div>
-                )}
+                <div className="relative shrink-0">
+                  {selected.avatarUrl ? (
+                    <img src={selected.avatarUrl} alt={selected.name} className="w-20 h-20 rounded-2xl object-cover" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-2xl bg-accent/15 flex items-center justify-center text-accent font-bold text-2xl">
+                      {selected.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent flex items-center justify-center cursor-pointer hover:bg-accent-hover transition-colors shadow-lg">
+                      <Camera size={13} className="text-white" />
+                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setSaving(true);
+                        try {
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          const uploadRes = await fetch("/api/upload/avatar", { method: "POST", body: fd });
+                          if (!uploadRes.ok) return;
+                          const { url } = await uploadRes.json();
+                          await fetch(`/api/members/${selected.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ avatarUrl: url }),
+                          });
+                          await fetchMembers();
+                          setSelected(prev => prev ? { ...prev, avatarUrl: url } : prev);
+                        } catch { /* silent */ }
+                        finally { setSaving(false); e.target.value = ""; }
+                      }} />
+                    </label>
+                  )}
+                </div>
                 <div>
                   <h2 className="text-xl font-semibold text-cream">{selected.name}</h2>
                   <div className="flex items-center gap-1.5 mt-1 text-dim">
