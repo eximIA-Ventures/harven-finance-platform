@@ -78,7 +78,11 @@ export async function POST(request: Request) {
     const auth = await requireAuth();
     if (!auth.ok) return auth.response;
 
-    const body = await request.json();
+    const raw = await request.json();
+    // Convert empty strings to null for optional fields
+    const body = Object.fromEntries(
+      Object.entries(raw).map(([k, v]) => [k, v === "" ? null : v])
+    );
     const v = validate(createEventSchema, body);
     if (!v.ok) {
       return NextResponse.json({ error: v.error }, { status: 400 });
