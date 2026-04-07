@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, ChevronRight, X, Loader2, Linkedin, Mail, GraduationCap, Calendar, Shield, UserCircle, ExternalLink, Instagram, Phone, Building2, Camera } from "lucide-react";
+import { Plus, Search, ChevronRight, X, Loader2, Linkedin, Mail, GraduationCap, Calendar, Shield, UserCircle, ExternalLink, Instagram, Phone, Building2, Camera, Link2 } from "lucide-react";
 
 interface Member {
   id: string;
@@ -71,6 +71,8 @@ export default function MembersPage() {
   const [newPassword, setNewPassword] = useState("");
   const [resetPwMsg, setResetPwMsg] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarUrlInput, setAvatarUrlInput] = useState("");
+  const [showAvatarUrl, setShowAvatarUrl] = useState(false);
 
   // Form state for new member
   const [formName, setFormName] = useState("");
@@ -558,31 +560,62 @@ export default function MembersPage() {
                     </div>
                   )}
                   {isAdmin && (
-                    <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent flex items-center justify-center cursor-pointer hover:bg-accent-hover transition-colors shadow-lg">
-                      <Camera size={13} className="text-white" />
-                      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
+                    <div className="absolute -bottom-1 -right-1 flex gap-1">
+                      <label className="w-7 h-7 rounded-full bg-accent flex items-center justify-center cursor-pointer hover:bg-accent-hover transition-colors shadow-lg">
+                        <Camera size={13} className="text-white" />
+                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setSaving(true);
+                          try {
+                            const fd = new FormData();
+                            fd.append("file", file);
+                            const uploadRes = await fetch("/api/upload/avatar", { method: "POST", body: fd });
+                            if (!uploadRes.ok) return;
+                            const { url } = await uploadRes.json();
+                            await fetch(`/api/members/${selected.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ avatarUrl: url }),
+                            });
+                            await fetchMembers();
+                            setSelected(prev => prev ? { ...prev, avatarUrl: url } : prev);
+                          } catch { /* silent */ }
+                          finally { setSaving(false); e.target.value = ""; }
+                        }} />
+                      </label>
+                      <button onClick={() => { setShowAvatarUrl(!showAvatarUrl); setAvatarUrlInput(""); }} className="w-7 h-7 rounded-full bg-bg-elevated ring-1 ring-[var(--border-color)] flex items-center justify-center hover:ring-accent/30 transition-colors shadow-lg">
+                        <Link2 size={12} className="text-dim" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Avatar URL input */}
+                {isAdmin && showAvatarUrl && (
+                  <div className="absolute top-28 left-6 right-6 z-10 p-3 rounded-xl bg-bg-card ring-1 ring-[var(--border-color)] shadow-elevated space-y-2">
+                    <p className="text-[10px] text-dim font-medium uppercase tracking-wider">URL da foto</p>
+                    <div className="flex gap-2">
+                      <input value={avatarUrlInput} onChange={(e) => setAvatarUrlInput(e.target.value)} placeholder="https://..." className="flex-1 px-3 py-2 bg-bg-elevated border border-[var(--border-color)] rounded-lg text-xs text-cream placeholder:text-dim/50 focus:outline-none focus:ring-1 focus:ring-accent" />
+                      <button disabled={!avatarUrlInput || saving} onClick={async () => {
                         setSaving(true);
                         try {
-                          const fd = new FormData();
-                          fd.append("file", file);
-                          const uploadRes = await fetch("/api/upload/avatar", { method: "POST", body: fd });
-                          if (!uploadRes.ok) return;
-                          const { url } = await uploadRes.json();
                           await fetch(`/api/members/${selected.id}`, {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ avatarUrl: url }),
+                            body: JSON.stringify({ avatarUrl: avatarUrlInput }),
                           });
                           await fetchMembers();
-                          setSelected(prev => prev ? { ...prev, avatarUrl: url } : prev);
+                          setSelected(prev => prev ? { ...prev, avatarUrl: avatarUrlInput } : prev);
+                          setShowAvatarUrl(false);
+                          setAvatarUrlInput("");
                         } catch { /* silent */ }
-                        finally { setSaving(false); e.target.value = ""; }
-                      }} />
-                    </label>
-                  )}
-                </div>
+                        finally { setSaving(false); }
+                      }} className="px-3 py-2 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent-hover disabled:opacity-40 transition-all">
+                        {saving ? "..." : "Salvar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <h2 className="text-xl font-semibold text-cream">{selected.name}</h2>
                   <div className="flex items-center gap-1.5 mt-1 text-dim">
