@@ -36,7 +36,7 @@ import {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type TaskType = "text" | "file" | "link" | "quiz" | "checklist";
+type TaskType = "text" | "file" | "link" | "quiz" | "checklist" | "video" | "attendance" | "material";
 type ReviewType = "mentor" | "peer" | "ai" | "auto";
 type UnlockRule = "sequential" | "parallel" | "manual";
 
@@ -131,6 +131,9 @@ const taskTypeLabels: Record<string, string> = {
   link: "Link",
   quiz: "Quiz",
   checklist: "Checklist",
+  video: "Video",
+  attendance: "Presenca",
+  material: "Material",
 };
 
 const taskTypeIcons: Record<string, typeof FileText> = {
@@ -139,6 +142,9 @@ const taskTypeIcons: Record<string, typeof FileText> = {
   link: Link2,
   quiz: HelpCircle,
   checklist: CheckSquare,
+  video: Play,
+  attendance: Users,
+  material: Download,
 };
 
 const reviewTypeLabels: Record<string, string> = {

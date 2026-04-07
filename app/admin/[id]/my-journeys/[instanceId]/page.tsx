@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, Check, CheckCircle2, Circle, Clock, Lock,
   FileText, Upload, Link2, HelpCircle, CheckSquare, AlertCircle,
-  Star, Send, LayoutGrid, Users, ExternalLink, Info,
+  Star, Send, LayoutGrid, Users, ExternalLink, Info, Play, Download,
 } from "lucide-react";
 
 // --- Types ------------------------------------------------------------------
@@ -59,8 +59,8 @@ interface InstanceData {
 
 const inputCls = "w-full px-3 py-2 bg-bg-elevated border border-[var(--border-color)] rounded-xl text-sm text-cream placeholder:text-dim/50 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/40 transition-all";
 
-const taskTypeIcons: Record<string, typeof FileText> = { text: FileText, file: Upload, link: Link2, quiz: HelpCircle, checklist: CheckSquare };
-const taskTypeLabels: Record<string, string> = { text: "Texto", file: "Arquivo", link: "Link", quiz: "Quiz", checklist: "Checklist" };
+const taskTypeIcons: Record<string, typeof FileText> = { text: FileText, file: Upload, link: Link2, quiz: HelpCircle, checklist: CheckSquare, video: Play, attendance: Users, material: Download };
+const taskTypeLabels: Record<string, string> = { text: "Texto", file: "Arquivo", link: "Link", quiz: "Quiz", checklist: "Checklist", video: "Video", attendance: "Presenca", material: "Material" };
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Circle }> = {
   pending: { label: "Pendente", color: "text-dim/40", icon: Circle },
   submitted: { label: "Em revisao", color: "text-blue-400", icon: Clock },
@@ -145,7 +145,7 @@ export default function TaskViewPage() {
     setSubmitting(task.taskId);
     try {
       const body: Record<string, unknown> = { task_id: task.taskId };
-      if (task.taskType === "text") body.content = input.content;
+      if (task.taskType === "text" || task.taskType === "attendance") body.content = input.content;
       if (task.taskType === "link") body.link_url = input.link_url;
       if (task.taskType === "file") { body.file_url = input.file_url; body.file_name = input.file_url.split("/").pop() || "arquivo"; }
       const res = await fetch(`/api/journey-instances/${instanceId}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -505,10 +505,72 @@ export default function TaskViewPage() {
 
                         {task.taskType === "quiz" && <div className="bg-bg-elevated rounded-xl p-4 text-center"><HelpCircle className="w-6 h-6 text-dim/30 mx-auto mb-2" /><p className="text-xs text-dim">Quiz em breve</p></div>}
 
+                        {/* Video — embedded link */}
+                        {task.taskType === "video" && cfg?.url && (
+                          <a href={cfg.url as string} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] hover:ring-accent/20 transition-all group">
+                            <div className="w-12 h-12 rounded-xl bg-red-500/15 flex items-center justify-center shrink-0">
+                              <Play className="w-5 h-5 text-red-400" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-cream group-hover:text-accent transition-colors">{(cfg.label as string) || "Assistir aula"}</p>
+                              <p className="text-[10px] text-dim truncate">{cfg.url as string}</p>
+                            </div>
+                            <ExternalLink className="w-4 h-4 text-dim group-hover:text-accent" />
+                          </a>
+                        )}
+
+                        {/* Attendance — checklist-style but styled as attendance */}
+                        {task.taskType === "attendance" && cfg?.items && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Users className="w-4 h-4 text-accent" />
+                              <span className="text-xs font-medium text-cream">Registro de Presenca</span>
+                            </div>
+                            {(cfg.items as string[]).map((item: string, idx: number) => {
+                              const checked = (input.content || "").split("||").includes(item);
+                              return (
+                                <button key={idx} onClick={() => {
+                                  const current = (input.content || "").split("||").filter(Boolean);
+                                  const next = checked ? current.filter(x => x !== item) : [...current, item];
+                                  setInput(task.taskId, "content", next.join("||"));
+                                }} className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all ${checked ? "bg-emerald-500/10 ring-1 ring-emerald-500/20" : "bg-bg-elevated ring-1 ring-[var(--border-color)] hover:ring-accent/20"}`}>
+                                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${checked ? "bg-emerald-500 text-white" : "ring-1 ring-[var(--border-color)]"}`}>
+                                    {checked && <Check className="w-3 h-3" />}
+                                  </div>
+                                  <span className={`text-sm ${checked ? "text-cream" : "text-dim"}`}>{item}</span>
+                                  {checked && <span className="text-[9px] text-emerald-400 ml-auto font-medium">Presente</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Material — download-only, no submission */}
+                        {task.taskType === "material" && (
+                          <div className="space-y-2">
+                            {cfg?.url ? (
+                              <a href={cfg.url as string} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] hover:ring-accent/20 transition-all group">
+                                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
+                                  <Download className="w-5 h-5 text-accent" />
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-cream group-hover:text-accent transition-colors">{(cfg.label as string) || "Baixar material"}</p>
+                                  <p className="text-[10px] text-dim">Clique para baixar</p>
+                                </div>
+                              </a>
+                            ) : (
+                              <div className="p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] text-center">
+                                <Download className="w-5 h-5 text-dim/30 mx-auto mb-1" />
+                                <p className="text-xs text-dim">Material sera disponibilizado pelo instrutor</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Submit button */}
-                        {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist"].includes(task.taskType) && (
+                        {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist", "attendance"].includes(task.taskType) && (
                           <div className="flex justify-end">
-                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content)}
+                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content)}
                               className="px-4 py-2 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2">
                               {isSubmittingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
                             </button>

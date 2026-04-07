@@ -436,7 +436,7 @@ export const journeyTasks = pgTable("journey_tasks", {
   name: text("name").notNull(),
   description: text("description"),
   sortOrder: integer("sort_order").notNull(),
-  taskType: text("task_type").notNull().default("text"), // text | file | link | quiz | checklist
+  taskType: text("task_type").notNull().default("text"), // text | file | link | quiz | checklist | video | attendance | material
   isRequired: integer("is_required").default(1),
   scope: text("scope").default("group"), // group | individual
   reviewType: text("review_type").default("mentor"), // mentor | peer | ai | auto
