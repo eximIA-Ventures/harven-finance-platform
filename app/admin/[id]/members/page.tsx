@@ -70,6 +70,7 @@ export default function MembersPage() {
   const [resetPwOpen, setResetPwOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [resetPwMsg, setResetPwMsg] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form state for new member
   const [formName, setFormName] = useState("");
@@ -98,6 +99,12 @@ export default function MembersPage() {
 
   useEffect(() => {
     fetchMembers();
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(u => {
+      if (u) {
+        const perms = u.permissions || [];
+        setIsAdmin(perms.includes("admin") || perms.includes("manage_users"));
+      }
+    });
   }, [fetchMembers]);
 
   const filtered = members.filter((m) => {
@@ -243,9 +250,11 @@ export default function MembersPage() {
             <span className="text-xs text-dim/60">{members.length} total</span>
           </div>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          <Plus size={16} /> Adicionar
-        </Button>
+        {isAdmin && (
+          <Button onClick={() => setShowForm(!showForm)}>
+            <Plus size={16} /> Adicionar
+          </Button>
+        )}
       </div>
 
       {/* Add Member Modal */}
@@ -730,7 +739,8 @@ export default function MembersPage() {
                   </div>
                 )}
 
-                {/* Actions */}
+                {/* Actions — admin only */}
+                {isAdmin && (
                 <div>
                   <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim mb-3">Acoes</h3>
                   <div className="space-y-2">
@@ -792,6 +802,7 @@ export default function MembersPage() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>
