@@ -18,7 +18,7 @@ interface TaskConfig {
   fields?: Array<{ key: string; label: string; placeholder?: string; type?: string; required?: boolean }>;
   placeholder?: string; minLength?: number; maxLength?: number; hint?: string;
   items?: string[];
-  questions?: Array<{ q: string; options?: string[] }>;
+  questions?: Array<{ q: string; options?: string[]; answer?: string }>;
 }
 
 interface MemberTaskStatus {
@@ -28,13 +28,15 @@ interface MemberTaskStatus {
 interface TaskStatus {
   taskId: string; taskName: string; taskType: string; description: string | null;
   isRequired: boolean; scope: string; reviewType: string; maxScore: number; config: TaskConfig | null;
+  dueDate: string | null;
   status: string; score: number | null; submittedAt: string | null;
+  content: string | null;
   reviewFeedback: string | null; reviewScore: number | null;
   memberStatus: MemberTaskStatus[] | null;
 }
 
 interface StageProgress {
-  stageId: string; stageName: string; stageColor: string | null; sortOrder: number;
+  stageId: string; stageName: string; stageDescription: string | null; stageColor: string | null; sortOrder: number;
   isCurrent: boolean; tasks: TaskStatus[]; completedCount: number; totalTasks: number;
   totalRequired: number; requiredCompleted: number; stageComplete: boolean;
 }
@@ -288,10 +290,22 @@ export default function TaskViewPage() {
         <div className="flex-1 min-w-0">
           {selectedStage ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: selectedStage.stageColor || "#C4A882" }} />
-                <h2 className="text-lg font-semibold text-cream">{selectedStage.stageName}</h2>
-                <span className="text-xs text-dim">{selectedStage.completedCount}/{selectedStage.totalTasks} concluidas</span>
+              <div className="mb-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: selectedStage.stageColor || "#C4A882" }} />
+                  <h2 className="text-lg font-semibold text-cream">{selectedStage.stageName}</h2>
+                  <span className="text-xs text-dim ml-auto">{selectedStage.completedCount}/{selectedStage.totalTasks}</span>
+                </div>
+                {/* Progress bar */}
+                <div className="h-1.5 rounded-full bg-bg-elevated overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-500" style={{
+                    width: `${selectedStage.totalTasks > 0 ? (selectedStage.completedCount / selectedStage.totalTasks) * 100 : 0}%`,
+                    backgroundColor: selectedStage.stageColor || "#C4A882",
+                  }} />
+                </div>
+                {selectedStage.stageDescription && (
+                  <p className="text-xs text-dim mt-2">{selectedStage.stageDescription}</p>
+                )}
               </div>
 
               {selectedStage.tasks.map(task => {
@@ -310,9 +324,22 @@ export default function TaskViewPage() {
                         <TaskIcon className="w-4 h-4 text-accent flex-shrink-0" />
                         <div>
                           <span className="text-sm font-medium text-cream">{task.taskName}</span>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-[10px] text-dim">{taskTypeLabels[task.taskType]}</span>
                             {task.isRequired && <Badge variant="accent" className="text-[9px] px-1.5 py-0">Obrigatoria</Badge>}
+                            {task.dueDate && (() => {
+                              const due = new Date(task.dueDate);
+                              const now = new Date();
+                              const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                              const isPastDue = diffDays < 0 && task.status === "pending";
+                              const isUrgent = diffDays >= 0 && diffDays <= 2 && task.status === "pending";
+                              return (
+                                <span className={`text-[9px] font-medium flex items-center gap-0.5 ${isPastDue ? "text-red-400" : isUrgent ? "text-amber-400" : "text-dim/60"}`}>
+                                  <Clock className="w-2.5 h-2.5" />
+                                  {isPastDue ? `${Math.abs(diffDays)}d atrasado` : diffDays === 0 ? "Hoje" : diffDays === 1 ? "Amanha" : `${diffDays}d restantes`}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -337,9 +364,44 @@ export default function TaskViewPage() {
                       </div>
                     )}
 
-                    {task.status === "submitted" && (
+                    {task.status === "submitted" && task.taskType !== "quiz" && (
                       <div className="flex items-center gap-3 bg-blue-500/5 border border-blue-500/15 rounded-xl px-4 py-3">
                         <Clock className="w-5 h-5 text-blue-400 flex-shrink-0" /><span className="text-sm text-blue-400">Aguardando revisao do mentor</span>
+                      </div>
+                    )}
+
+                    {/* Quiz result after submission */}
+                    {(task.status === "submitted" || task.status === "approved") && task.taskType === "quiz" && cfg?.questions && task.content && (
+                      <div className="rounded-xl border border-[var(--border-color)] bg-bg-elevated overflow-hidden">
+                        <div className="px-4 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
+                          <span className="text-xs font-semibold text-cream">Suas Respostas</span>
+                          {cfg.questions.some((q: { answer?: string }) => q.answer) && (() => {
+                            const answers = task.content.split("|||");
+                            const correct = (cfg.questions as Array<{answer?: string}>).filter((q, i) => q.answer && answers[i]?.trim().toLowerCase() === q.answer.trim().toLowerCase()).length;
+                            const total = (cfg.questions as Array<{answer?: string}>).filter(q => q.answer).length;
+                            return <span className={`text-xs font-bold ${correct === total ? "text-emerald-400" : correct >= total / 2 ? "text-amber-400" : "text-red-400"}`}>{correct}/{total} acertos</span>;
+                          })()}
+                        </div>
+                        <div className="divide-y divide-[var(--border-color)]">
+                          {(cfg.questions as Array<{q: string; options?: string[]; answer?: string}>).map((question, qIdx) => {
+                            const answers = task.content!.split("|||");
+                            const userAnswer = answers[qIdx] || "";
+                            const hasAnswer = !!question.answer;
+                            const isCorrect = hasAnswer && userAnswer.trim().toLowerCase() === question.answer!.trim().toLowerCase();
+                            return (
+                              <div key={qIdx} className="px-4 py-3">
+                                <p className="text-xs text-cream font-medium mb-1"><span className="text-accent font-mono mr-1">{qIdx + 1}.</span>{question.q}</p>
+                                <div className={`flex items-start gap-2 px-3 py-2 rounded-lg text-sm ${hasAnswer ? (isCorrect ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300") : "bg-bg-card text-cream/80"}`}>
+                                  {hasAnswer && (isCorrect ? <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />)}
+                                  <span className="text-xs">{userAnswer || "Sem resposta"}</span>
+                                </div>
+                                {hasAnswer && !isCorrect && question.answer && (
+                                  <p className="text-[10px] text-emerald-400/70 mt-1 ml-3">Resposta correta: {question.answer}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 

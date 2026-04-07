@@ -443,6 +443,7 @@ export const journeyTasks = pgTable("journey_tasks", {
   config: text("config"), // JSON: type-specific configuration
   maxScore: real("max_score").default(10),
   weight: real("weight").default(1),
+  dueDate: text("due_date"), // ISO date — when this task is due
 });
 
 // ============================================================================
