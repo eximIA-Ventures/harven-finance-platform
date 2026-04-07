@@ -377,13 +377,18 @@ function EventDetailModal({
   onRespond,
   onFileUploaded,
   respondingTo,
+  isAdmin,
+  currentUserId,
 }: {
   event: EventRow;
   onClose: () => void;
   onRespond: (eventId: string, status: "confirmed" | "maybe" | "declined") => void;
   onFileUploaded: () => void;
   respondingTo: string | null;
+  isAdmin: boolean;
+  currentUserId: string | null;
 }) {
+  const canManageFiles = isAdmin || event.createdBy === currentUserId;
   const [uploading, setUploading] = useState(false);
   const typeKey = event.eventType || "meeting";
   const isOnline = event.locationType === "online" || event.locationType === "hibrido";
@@ -528,11 +533,13 @@ function EventDetailModal({
                 <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim flex items-center gap-1.5">
                   <Paperclip className="w-3 h-3" /> Anexos ({event.files?.length || 0})
                 </h3>
-                <label className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-xs font-medium hover:bg-accent/20 transition-colors cursor-pointer">
-                  <Upload className="w-3 h-3" />
-                  {uploading ? "Enviando..." : "Anexar"}
-                  <input type="file" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
-                </label>
+                {canManageFiles && (
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-xs font-medium hover:bg-accent/20 transition-colors cursor-pointer">
+                    <Upload className="w-3 h-3" />
+                    {uploading ? "Enviando..." : "Anexar"}
+                    <input type="file" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+                  </label>
+                )}
               </div>
               {event.files && event.files.length > 0 ? (
                 <div className="space-y-2">
@@ -545,12 +552,31 @@ function EventDetailModal({
                         <p className="text-sm text-cream font-medium truncate">{f.name}</p>
                         <p className="text-[10px] text-dim">{f.fileName}{f.fileSize ? ` · ${fmtSize(f.fileSize)}` : ""}</p>
                       </div>
-                      <a href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg text-dim hover:text-accent hover:bg-accent/10 transition-colors">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(f.fileUrl);
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = f.fileName || f.name;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                          } catch { window.open(f.fileUrl, "_blank"); }
+                        }}
+                        className="p-2 rounded-lg text-dim hover:text-accent hover:bg-accent/10 transition-colors"
+                        title="Baixar"
+                      >
                         <Download className="w-4 h-4" />
-                      </a>
-                      <button onClick={() => handleDeleteFile(f.id)} className="p-2 rounded-lg text-dim hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100">
-                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      {canManageFiles && (
+                        <button onClick={() => handleDeleteFile(f.id)} className="p-2 rounded-lg text-dim hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -682,6 +708,8 @@ export default function AgendaPage() {
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
   const [detailEvent, setDetailEvent] = useState<EventRow | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
   const fetchEvents = useCallback(async () => {
@@ -693,6 +721,11 @@ export default function AgendaPage() {
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(u => {
+      if (u) { setCurrentUserId(u.id); setIsAdmin((u.permissions || []).includes("admin")); }
+    });
+  }, []);
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -904,6 +937,8 @@ export default function AgendaPage() {
           event={detailEvent}
           onClose={() => setDetailEvent(null)}
           onRespond={(id, status) => { handleRespond(id, status); }}
+          isAdmin={isAdmin}
+          currentUserId={currentUserId}
           onFileUploaded={async () => {
             const res = await fetch("/api/events");
             if (res.ok) {
