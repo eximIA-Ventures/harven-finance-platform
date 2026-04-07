@@ -102,7 +102,9 @@ export default function MembersPage() {
     fetch("/api/auth/me").then(r => r.ok ? r.json() : null).then(u => {
       if (u) {
         const perms = u.permissions || [];
-        setIsAdmin(perms.includes("admin") || perms.includes("manage_users"));
+        const cargo = u.memberStatus || "";
+        const isDiretoria = ["presidente", "vice-presidente"].includes(cargo);
+        setIsAdmin(perms.includes("admin") || perms.includes("manage_users") || isDiretoria);
       }
     });
   }, [fetchMembers]);

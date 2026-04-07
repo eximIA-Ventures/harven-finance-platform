@@ -63,6 +63,7 @@ export interface SessionUser {
   evaluationId: string | null;
   candidateId: string | null;
   permissions: Permission[];
+  memberStatus?: string | null;
   mustChangePassword?: boolean;
 }
 
@@ -97,6 +98,7 @@ export async function getSession(): Promise<SessionUser | null> {
     evaluationId: user.evaluationId,
     candidateId: user.candidateId,
     permissions: parsePermissions(user.permissions),
+    memberStatus: user.memberStatus,
   };
 }
 
