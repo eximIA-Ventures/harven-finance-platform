@@ -521,6 +521,23 @@ export const taskReviews = pgTable("task_reviews", {
 });
 
 // ============================================================================
+// EVENT FILES — attachments for events (slides, materials, etc.)
+// ============================================================================
+export const eventFiles = pgTable("event_files", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => events.id),
+  name: text("name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type"),
+  fileSize: integer("file_size"),
+  uploadedBy: text("uploaded_by"),
+  createdAt: text("created_at").notNull(),
+});
+
+// ============================================================================
 // JOURNEY FILES — shared resources available to all groups in a journey
 // ============================================================================
 export const journeyFiles = pgTable("journey_files", {

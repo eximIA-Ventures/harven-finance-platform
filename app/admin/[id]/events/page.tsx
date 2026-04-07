@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Calendar, Clock, MapPin, Users, Mic, Plus, X, Trash2, Loader2,
   Check, HelpCircle, XCircle, ChevronDown, Lock, Globe,
-  Image as ImageIcon, Video, Link2, UserPlus,
+  Image as ImageIcon, Video, Link2, UserPlus, FileText, Download, Upload, Paperclip,
 } from "lucide-react";
 
 type EventType = "meeting" | "palestra" | "workshop" | "competicao" | "social";
@@ -17,6 +17,8 @@ type LocationType = "presencial" | "online" | "hibrido";
 interface Attendee { userId: string; name: string | null; avatar: string | null; status: string; }
 interface MemberOption { id: string; name: string; email: string; avatarUrl: string | null; memberStatus: string | null; }
 
+interface EventFile { id: string; name: string; fileUrl: string; fileName: string; fileType: string | null; fileSize: number | null; }
+
 interface EventRow {
   id: string; title: string; description: string | null; eventType: string | null;
   location: string | null; startDate: string; endDate: string | null;
@@ -24,6 +26,7 @@ interface EventRow {
   imageUrl: string | null; meetingUrl: string | null; locationType: string | null;
   visibility: string | null; createdBy: string | null; createdAt: string;
   attendeeCount: number; attendees: Attendee[]; myStatus: string | null; creatorName: string | null;
+  files: EventFile[];
 }
 
 const typeLabels: Record<string, string> = { meeting: "Reuniao", palestra: "Palestra", workshop: "Workshop", competicao: "Competicao", social: "Social" };
@@ -366,6 +369,236 @@ function CreateEventModal({ open, onClose, onCreated }: { open: boolean; onClose
   );
 }
 
+// ─── Event Detail Modal ────────────────────────────────────────────────────
+
+function EventDetailModal({
+  event,
+  onClose,
+  onRespond,
+  onFileUploaded,
+  respondingTo,
+}: {
+  event: EventRow;
+  onClose: () => void;
+  onRespond: (eventId: string, status: "confirmed" | "maybe" | "declined") => void;
+  onFileUploaded: () => void;
+  respondingTo: string | null;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const typeKey = event.eventType || "meeting";
+  const isOnline = event.locationType === "online" || event.locationType === "hibrido";
+  const startD = new Date(event.startDate);
+  const confirmed = event.attendees.filter(a => a.status === "confirmed").length;
+  const maybeCount = event.attendees.filter(a => a.status === "maybe").length;
+  const declined = event.attendees.filter(a => a.status === "declined").length;
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch("/api/upload/journey", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const { url, fileName, fileType, fileSize } = await uploadRes.json();
+      await fetch(`/api/events/${event.id}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name.replace(/\.[^.]+$/, ""), fileUrl: url, fileName, fileType, fileSize }),
+      });
+      onFileUploaded();
+    } catch { /* silent */ }
+    finally { setUploading(false); }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    await fetch(`/api/events/${event.id}/files?fileId=${fileId}`, { method: "DELETE" });
+    onFileUploaded();
+  };
+
+  const fmtSize = (bytes: number | null) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" onClick={onClose} style={{ animation: "modal-fade 0.2s ease-out" }} />
+      <div className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
+        <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] overflow-hidden">
+          {/* Color bar */}
+          <div className={`h-1.5 ${typeColors[typeKey]}`} />
+
+          {/* Header */}
+          <div className="px-6 pt-5 pb-4 border-b border-[var(--border-color)]">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <Badge variant={typeBadgeVariant[typeKey] || "default"}>{typeLabels[typeKey] || typeKey}</Badge>
+                  {event.visibility === "personal" && <Badge variant="default"><Lock className="w-3 h-3 mr-1" />Convidados</Badge>}
+                  {isOnline && <Badge variant="info"><Video className="w-3 h-3 mr-1" />Online</Badge>}
+                </div>
+                <h2 className="text-xl font-semibold text-cream">{event.title}</h2>
+              </div>
+              <button onClick={onClose} className="p-1.5 rounded-lg text-dim hover:text-cream hover:bg-bg-elevated transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Date/Time/Location row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-elevated">
+                <Calendar className="w-4 h-4 text-accent shrink-0" />
+                <div>
+                  <p className="text-[10px] text-dim uppercase tracking-wider">Data</p>
+                  <p className="text-sm text-cream">{startD.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-elevated">
+                <Clock className="w-4 h-4 text-accent shrink-0" />
+                <div>
+                  <p className="text-[10px] text-dim uppercase tracking-wider">Horario</p>
+                  <p className="text-sm text-cream">
+                    {startD.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    {event.endDate && ` — ${new Date(event.endDate).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+                  </p>
+                </div>
+              </div>
+              {event.location && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-elevated">
+                  <MapPin className="w-4 h-4 text-accent shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-dim uppercase tracking-wider">Local</p>
+                    <p className="text-sm text-cream">{event.location}</p>
+                  </div>
+                </div>
+              )}
+              {event.speaker && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-bg-elevated">
+                  <Mic className="w-4 h-4 text-accent shrink-0" />
+                  <div>
+                    <p className="text-[10px] text-dim uppercase tracking-wider">Palestrante</p>
+                    <p className="text-sm text-cream">{event.speakerTitle ? `${event.speakerTitle} — ` : ""}{event.speaker}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Meeting URL */}
+            {event.meetingUrl && (
+              <a href={event.meetingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/15 transition-colors text-sm font-medium">
+                <Video className="w-4 h-4" /> Entrar na reuniao online
+              </a>
+            )}
+
+            {/* Description */}
+            {event.description && (
+              <div>
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim mb-2">Descricao</h3>
+                <p className="text-sm text-cream/80 leading-relaxed whitespace-pre-line">{event.description}</p>
+              </div>
+            )}
+
+            {/* RSVP */}
+            <div>
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim mb-3">Sua Presenca</h3>
+              <div className="flex items-center gap-2">
+                {respondingTo === event.id ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : (
+                  <>
+                    <button onClick={() => onRespond(event.id, "confirmed")} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${event.myStatus === "confirmed" ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30" : "bg-bg-elevated text-dim hover:text-emerald-400"}`}>
+                      <Check className="w-4 h-4" /> Confirmar
+                    </button>
+                    <button onClick={() => onRespond(event.id, "maybe")} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${event.myStatus === "maybe" ? "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30" : "bg-bg-elevated text-dim hover:text-amber-400"}`}>
+                      <HelpCircle className="w-4 h-4" /> Talvez
+                    </button>
+                    <button onClick={() => onRespond(event.id, "declined")} className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${event.myStatus === "declined" ? "bg-red-500/15 text-red-400 ring-1 ring-red-500/30" : "bg-bg-elevated text-dim hover:text-red-400"}`}>
+                      <XCircle className="w-4 h-4" /> Recusar
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim flex items-center gap-1.5">
+                  <Paperclip className="w-3 h-3" /> Anexos ({event.files?.length || 0})
+                </h3>
+                <label className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-xs font-medium hover:bg-accent/20 transition-colors cursor-pointer">
+                  <Upload className="w-3 h-3" />
+                  {uploading ? "Enviando..." : "Anexar"}
+                  <input type="file" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+                </label>
+              </div>
+              {event.files && event.files.length > 0 ? (
+                <div className="space-y-2">
+                  {event.files.map(f => (
+                    <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] group">
+                      <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-red-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-cream font-medium truncate">{f.name}</p>
+                        <p className="text-[10px] text-dim">{f.fileName}{f.fileSize ? ` · ${fmtSize(f.fileSize)}` : ""}</p>
+                      </div>
+                      <a href={f.fileUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg text-dim hover:text-accent hover:bg-accent/10 transition-colors">
+                        <Download className="w-4 h-4" />
+                      </a>
+                      <button onClick={() => handleDeleteFile(f.id)} className="p-2 rounded-lg text-dim hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-dim/50 text-center py-3">Nenhum anexo</p>
+              )}
+            </div>
+
+            {/* Participants */}
+            <div>
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim mb-3">
+                Participantes ({event.attendees.length})
+                <span className="ml-2 font-normal">
+                  <span className="text-emerald-400">{confirmed} confirmados</span>
+                  {maybeCount > 0 && <span className="text-amber-400"> · {maybeCount} talvez</span>}
+                  {declined > 0 && <span className="text-red-400"> · {declined} recusados</span>}
+                </span>
+              </h3>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                {event.attendees.map(a => (
+                  <div key={a.userId} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-bg-elevated">
+                    {a.avatar
+                      ? <img src={a.avatar} alt="" className="w-7 h-7 rounded-full object-cover" />
+                      : <div className="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-[10px] text-accent font-bold">{(a.name || "?")[0].toUpperCase()}</div>
+                    }
+                    <span className="text-xs text-cream truncate flex-1">{a.name || "—"}</span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${a.status === "confirmed" ? "bg-emerald-400" : a.status === "maybe" ? "bg-amber-400" : a.status === "declined" ? "bg-red-400" : "bg-blue-400"}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Creator */}
+            {event.creatorName && (
+              <p className="text-[10px] text-dim text-right">Criado por {event.creatorName}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes modal-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes modal-scale { from { opacity: 0; transform: scale(0.96) translateY(8px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function getEventEnd(e: { startDate: string; endDate: string | null }): string {
@@ -447,6 +680,7 @@ export default function AgendaPage() {
   const [showModal, setShowModal] = useState(false);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [detailEvent, setDetailEvent] = useState<EventRow | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
@@ -525,7 +759,8 @@ export default function AgendaPage() {
     return (
       <div
         key={event.id}
-        className={`group rounded-xl ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)] overflow-hidden ${isToday && !isPast ? "ring-accent/30 bg-accent/[0.03]" : "ring-[var(--border-color)] bg-bg-card"} ${isPast ? "opacity-60" : ""}`}
+        onClick={() => setDetailEvent(event)}
+        className={`group rounded-xl ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)] overflow-hidden cursor-pointer ${isToday && !isPast ? "ring-accent/30 bg-accent/[0.03]" : "ring-[var(--border-color)] bg-bg-card"} ${isPast ? "opacity-60" : ""}`}
       >
         {/* Color bar top */}
         <div className={`h-1 ${typeColors[typeKey]}`} />
@@ -617,16 +852,16 @@ export default function AgendaPage() {
                 <div className="flex items-center gap-1">
                   {respondingTo === event.id ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : (
                     <>
-                      <button onClick={() => handleRespond(event.id, "confirmed")} disabled={isFull && event.myStatus !== "confirmed"} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "confirmed" ? "bg-emerald-500/15 text-emerald-400" : "text-dim/40 hover:text-emerald-400 hover:bg-emerald-500/10"}`} title="Confirmar"><Check className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleRespond(event.id, "maybe")} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "maybe" ? "bg-amber-500/15 text-amber-400" : "text-dim/40 hover:text-amber-400 hover:bg-amber-500/10"}`} title="Talvez"><HelpCircle className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleRespond(event.id, "declined")} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "declined" ? "bg-red-500/15 text-red-400" : "text-dim/40 hover:text-red-400 hover:bg-red-500/10"}`} title="Recusar"><XCircle className="w-3.5 h-3.5" /></button>
+                      <button onClick={(ev) => { ev.stopPropagation(); handleRespond(event.id, "confirmed"); }} disabled={isFull && event.myStatus !== "confirmed"} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "confirmed" ? "bg-emerald-500/15 text-emerald-400" : "text-dim/40 hover:text-emerald-400 hover:bg-emerald-500/10"}`} title="Confirmar"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={(ev) => { ev.stopPropagation(); handleRespond(event.id, "maybe"); }} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "maybe" ? "bg-amber-500/15 text-amber-400" : "text-dim/40 hover:text-amber-400 hover:bg-amber-500/10"}`} title="Talvez"><HelpCircle className="w-3.5 h-3.5" /></button>
+                      <button onClick={(ev) => { ev.stopPropagation(); handleRespond(event.id, "declined"); }} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "declined" ? "bg-red-500/15 text-red-400" : "text-dim/40 hover:text-red-400 hover:bg-red-500/10"}`} title="Recusar"><XCircle className="w-3.5 h-3.5" /></button>
                     </>
                   )}
                 </div>
               )}
               <div className="flex items-center gap-0.5">
-                <button onClick={() => setExpandedEvent(isExpanded ? null : event.id)} className="p-1 text-dim/40 hover:text-cream transition-colors"><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></button>
-                <button onClick={() => handleDelete(event.id)} className="p-1 text-dim/40 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
+                <button onClick={(ev) => { ev.stopPropagation(); setExpandedEvent(isExpanded ? null : event.id); }} className="p-1 text-dim/40 hover:text-cream transition-colors"><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></button>
+                <button onClick={(ev) => { ev.stopPropagation(); handleDelete(event.id); }} className="p-1 text-dim/40 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
               </div>
             </div>
           </div>
@@ -663,6 +898,23 @@ export default function AgendaPage() {
       </div>
 
       <CreateEventModal open={showModal} onClose={() => setShowModal(false)} onCreated={fetchEvents} />
+
+      {detailEvent && (
+        <EventDetailModal
+          event={detailEvent}
+          onClose={() => setDetailEvent(null)}
+          onRespond={(id, status) => { handleRespond(id, status); }}
+          onFileUploaded={async () => {
+            const res = await fetch("/api/events");
+            if (res.ok) {
+              const updated = await res.json();
+              setEvents(updated);
+              setDetailEvent(prev => prev ? updated.find((e: EventRow) => e.id === prev.id) || prev : null);
+            }
+          }}
+          respondingTo={respondingTo}
+        />
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}

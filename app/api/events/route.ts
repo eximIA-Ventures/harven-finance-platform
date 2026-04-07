@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { events, eventAttendees, users } from "@/lib/db/schema";
+import { events, eventAttendees, eventFiles, users } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "@/lib/api-auth";
@@ -43,6 +43,12 @@ export async function GET(request: Request) {
           creatorName = creator?.name || null;
         }
 
+        // Get files
+        const files = await db
+          .select()
+          .from(eventFiles)
+          .where(eq(eventFiles.eventId, event.id));
+
         return {
           ...event,
           attendeeCount: attendees.length,
@@ -54,6 +60,7 @@ export async function GET(request: Request) {
           })),
           myStatus: myAttendance?.status || null,
           creatorName,
+          files,
         };
       })
     );
