@@ -33,6 +33,15 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
+# Runtime env vars — injected by EasyPanel/Docker at container start
+# These are NOT baked into the image; they come from the deployment config
+ENV SUPABASE_URL=""
+ENV SUPABASE_ANON_KEY=""
+ENV SUPABASE_SERVICE_ROLE_KEY=""
+ENV DATABASE_URL=""
+ENV SESSION_SECRET=""
+ENV ANTHROPIC_API_KEY=""
+
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
