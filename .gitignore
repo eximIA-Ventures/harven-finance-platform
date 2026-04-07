@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+.next/
+
+# database
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
+# env
+.env
+.env.local
+
+# next
+*.tsbuildinfo
+next-env.d.ts

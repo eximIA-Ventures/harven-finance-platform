@@ -1,0 +1,1 @@
+ALTER TABLE "journey_tasks" ADD COLUMN "scope" text DEFAULT 'group';
