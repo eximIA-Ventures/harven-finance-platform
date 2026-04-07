@@ -366,15 +366,89 @@ function CreateEventModal({ open, onClose, onCreated }: { open: boolean; onClose
   );
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function getEventEnd(e: { startDate: string; endDate: string | null }): string {
+  if (e.endDate) return e.endDate;
+  const d = new Date(e.startDate);
+  d.setHours(d.getHours() + 2);
+  return d.toISOString();
+}
+
+function isSameDay(a: Date, b: Date) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+function isThisWeek(d: Date, now: Date) {
+  const start = new Date(now); start.setDate(now.getDate() - now.getDay());
+  const end = new Date(start); end.setDate(start.getDate() + 7);
+  return d >= start && d < end;
+}
+
+// ─── Mini Calendar ─────────────────────────────────────────────────────────
+
+function MiniCalendar({ events, selectedDate, onSelect }: { events: EventRow[]; selectedDate: Date; onSelect: (d: Date) => void }) {
+  const [viewMonth, setViewMonth] = useState(new Date());
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  const eventDates = new Set(events.map(e => {
+    const d = new Date(e.startDate);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  }));
+
+  const days: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(i);
+
+  const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+  return (
+    <div className="rounded-xl ring-1 ring-[var(--border-color)] bg-bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={() => setViewMonth(new Date(year, month - 1))} className="p-1 text-dim hover:text-cream transition-colors">←</button>
+        <span className="text-sm font-semibold text-cream">{monthNames[month]} {year}</span>
+        <button onClick={() => setViewMonth(new Date(year, month + 1))} className="p-1 text-dim hover:text-cream transition-colors">→</button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => (
+          <span key={i} className="text-[9px] text-dim/50 font-medium py-1">{d}</span>
+        ))}
+        {days.map((day, i) => {
+          if (day === null) return <div key={`e${i}`} />;
+          const date = new Date(year, month, day);
+          const isToday = isSameDay(date, today);
+          const isSelected = isSameDay(date, selectedDate);
+          const hasEvent = eventDates.has(`${year}-${month}-${day}`);
+          return (
+            <button
+              key={i}
+              onClick={() => onSelect(date)}
+              className={`relative w-8 h-8 rounded-lg text-xs font-medium transition-all mx-auto
+                ${isSelected ? "bg-accent text-white" : isToday ? "bg-accent/15 text-accent font-bold" : "text-cream hover:bg-bg-elevated"}`}
+            >
+              {day}
+              {hasEvent && !isSelected && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function AgendaPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
+  const [view, setView] = useState<"upcoming" | "past" | "day">("upcoming");
   const [showModal, setShowModal] = useState(false);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [typeFilter, setTypeFilter] = useState<string>("all");
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -386,8 +460,38 @@ export default function AgendaPage() {
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
-  const now = new Date().toISOString();
-  const filtered = events.filter(e => tab === "upcoming" ? e.startDate >= now : e.startDate < now);
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  // Filter using end time
+  const isUpcoming = (e: EventRow) => getEventEnd(e) >= nowIso;
+  const filtered = (() => {
+    let list = events;
+    if (view === "upcoming") list = events.filter(isUpcoming).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    else if (view === "past") list = events.filter(e => !isUpcoming(e)).sort((a, b) => b.startDate.localeCompare(a.startDate));
+    else if (view === "day") list = events.filter(e => isSameDay(new Date(e.startDate), selectedDate)).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    if (typeFilter !== "all") list = list.filter(e => (e.eventType || "meeting") === typeFilter);
+    return list;
+  })();
+
+  // Group upcoming by: Today, This Week, Later
+  const grouped = (() => {
+    if (view !== "upcoming") return null;
+    const today: EventRow[] = [];
+    const thisWeek: EventRow[] = [];
+    const later: EventRow[] = [];
+    for (const e of filtered) {
+      const d = new Date(e.startDate);
+      if (isSameDay(d, now)) today.push(e);
+      else if (isThisWeek(d, now)) thisWeek.push(e);
+      else later.push(e);
+    }
+    return [
+      { label: "Hoje", items: today, color: "bg-accent" },
+      { label: "Esta Semana", items: thisWeek, color: "bg-sage" },
+      { label: "Próximos", items: later, color: "bg-atom" },
+    ].filter(g => g.items.length > 0);
+  })();
 
   const handleDelete = async (eventId: string) => {
     if (!confirm("Remover este evento?")) return;
@@ -400,139 +504,235 @@ export default function AgendaPage() {
     finally { setRespondingTo(null); }
   };
 
-  const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) => { try { return new Date(iso).toLocaleDateString("pt-BR", opts); } catch { return ""; } };
   const fmtTime = (iso: string) => { try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
-
-  const upcomingCount = events.filter(e => e.startDate >= now).length;
-  const pastCount = events.filter(e => e.startDate < now).length;
+  const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString("pt-BR", { weekday: "short", day: "numeric", month: "short" }); } catch { return ""; } };
   const confirmed = (e: EventRow) => e.attendees.filter(a => a.status === "confirmed").length;
   const maybe = (e: EventRow) => e.attendees.filter(a => a.status === "maybe").length;
+  const upcomingCount = events.filter(isUpcoming).length;
+  const pastCount = events.filter(e => !isUpcoming(e)).length;
+
+  const typeColorDot: Record<string, string> = { meeting: "bg-blue-400", palestra: "bg-purple-400", workshop: "bg-amber-400", competicao: "bg-red-400", social: "bg-emerald-400" };
+
+  const renderEventCard = (event: EventRow) => {
+    const isPast = !isUpcoming(event);
+    const isFull = event.maxAttendees != null && confirmed(event) >= event.maxAttendees;
+    const typeKey = event.eventType || "meeting";
+    const isExpanded = expandedEvent === event.id;
+    const isOnline = event.locationType === "online" || event.locationType === "hibrido";
+    const startD = new Date(event.startDate);
+    const isToday = isSameDay(startD, now);
+
+    return (
+      <div
+        key={event.id}
+        className={`group rounded-xl ring-1 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.1)] overflow-hidden ${isToday && !isPast ? "ring-accent/30 bg-accent/[0.03]" : "ring-[var(--border-color)] bg-bg-card"} ${isPast ? "opacity-60" : ""}`}
+      >
+        {/* Color bar top */}
+        <div className={`h-1 ${typeColors[typeKey]}`} />
+
+        <div className="p-4">
+          <div className="flex items-start gap-4">
+            {/* Date block */}
+            <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center shrink-0 ${isToday ? "bg-accent/15 ring-1 ring-accent/20" : "bg-bg-elevated"}`}>
+              <span className={`text-[8px] uppercase font-bold ${isToday ? "text-accent" : "text-dim"}`}>
+                {startD.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}
+              </span>
+              <span className="text-xl font-bold text-cream leading-none">{startD.getDate()}</span>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <h3 className="text-sm font-semibold text-cream">{event.title}</h3>
+                {isToday && !isPast && <span className="text-[9px] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded">HOJE</span>}
+                <span className={`w-2 h-2 rounded-full ${typeColorDot[typeKey] || "bg-dim"}`} title={typeLabels[typeKey]} />
+                <span className="text-[10px] text-dim">{typeLabels[typeKey]}</span>
+                {event.visibility === "personal" && <Lock className="w-3 h-3 text-dim" />}
+                {isOnline && <Video className="w-3 h-3 text-blue-400" />}
+              </div>
+
+              {/* Time & Location row */}
+              <div className="flex items-center gap-4 text-[11px] text-dim flex-wrap">
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {fmtTime(event.startDate)}{event.endDate ? ` — ${fmtTime(event.endDate)}` : ""}
+                </span>
+                {event.location && (
+                  <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>
+                )}
+                {event.meetingUrl && (
+                  <a href={event.meetingUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-accent hover:underline"><Link2 className="w-3 h-3" />Entrar</a>
+                )}
+                {event.speaker && (
+                  <span className="inline-flex items-center gap-1"><Mic className="w-3 h-3" />{event.speaker}</span>
+                )}
+              </div>
+
+              {event.description && <p className="text-[11px] text-dim/70 mt-1.5 line-clamp-1">{event.description}</p>}
+
+              {/* Attendees row */}
+              <div className="flex items-center gap-3 mt-2.5">
+                {/* Avatar stack */}
+                {event.attendees.length > 0 && (
+                  <div className="flex -space-x-1.5">
+                    {event.attendees.slice(0, 5).map(a => (
+                      a.avatar
+                        ? <img key={a.userId} src={a.avatar} alt="" className="w-6 h-6 rounded-full object-cover ring-2 ring-bg-card" />
+                        : <div key={a.userId} className="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[8px] text-accent font-bold ring-2 ring-bg-card">{(a.name || "?")[0].toUpperCase()}</div>
+                    ))}
+                    {event.attendees.length > 5 && (
+                      <div className="w-6 h-6 rounded-full bg-bg-elevated flex items-center justify-center text-[8px] text-dim font-medium ring-2 ring-bg-card">+{event.attendees.length - 5}</div>
+                    )}
+                  </div>
+                )}
+                <span className="text-[10px] text-emerald-400 font-medium">{confirmed(event)} confirmados</span>
+                {maybe(event) > 0 && <span className="text-[10px] text-amber-400">{maybe(event)} talvez</span>}
+                {event.creatorName && <span className="text-[10px] text-dim ml-auto">por {event.creatorName}</span>}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              {!isPast && (
+                <div className="flex items-center gap-1">
+                  {respondingTo === event.id ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : (
+                    <>
+                      <button onClick={() => handleRespond(event.id, "confirmed")} disabled={isFull && event.myStatus !== "confirmed"} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "confirmed" ? "bg-emerald-500/15 text-emerald-400" : "text-dim/40 hover:text-emerald-400 hover:bg-emerald-500/10"}`} title="Confirmar"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleRespond(event.id, "maybe")} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "maybe" ? "bg-amber-500/15 text-amber-400" : "text-dim/40 hover:text-amber-400 hover:bg-amber-500/10"}`} title="Talvez"><HelpCircle className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleRespond(event.id, "declined")} className={`p-1.5 rounded-lg transition-colors ${event.myStatus === "declined" ? "bg-red-500/15 text-red-400" : "text-dim/40 hover:text-red-400 hover:bg-red-500/10"}`} title="Recusar"><XCircle className="w-3.5 h-3.5" /></button>
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => setExpandedEvent(isExpanded ? null : event.id)} className="p-1 text-dim/40 hover:text-cream transition-colors"><ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></button>
+                <button onClick={() => handleDelete(event.id)} className="p-1 text-dim/40 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
+              </div>
+            </div>
+          </div>
+
+          {/* Expanded attendees */}
+          {isExpanded && (
+            <div className="mt-3 pt-3 border-t border-[var(--border-color)]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-dim block mb-2">Participantes ({event.attendees.length})</span>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                {event.attendees.map(a => (
+                  <div key={a.userId} className="flex items-center gap-2 p-2 rounded-lg bg-bg-elevated">
+                    {a.avatar ? <img src={a.avatar} alt="" className="w-5 h-5 rounded-full object-cover" /> : <div className="w-5 h-5 rounded-full bg-accent/10 flex items-center justify-center text-[8px] text-accent font-medium">{(a.name || "?")[0].toUpperCase()}</div>}
+                    <span className="text-[11px] text-cream truncate flex-1">{a.name || "—"}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${a.status === "confirmed" ? "bg-emerald-400" : a.status === "maybe" ? "bg-amber-400" : a.status === "declined" ? "bg-red-400" : "bg-blue-400"}`} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-6 animate-fade-in-up">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-serif">Agenda</h2>
-          <p className="text-dim text-sm mt-1">{loading ? "Carregando..." : `${upcomingCount} proximos · ${pastCount} passados`}</p>
+          <p className="text-dim text-sm mt-1">{loading ? "Carregando..." : `${upcomingCount} próximos · ${pastCount} passados`}</p>
         </div>
         <Button size="sm" onClick={() => setShowModal(true)}><Plus className="w-4 h-4" />Novo Evento</Button>
       </div>
 
       <CreateEventModal open={showModal} onClose={() => setShowModal(false)} onCreated={fetchEvents} />
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-bg-elevated border border-[var(--border-color)] rounded-lg w-fit">
-        {(["upcoming", "past"] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-1.5 text-sm rounded-md transition-all duration-150 ${tab === t ? "bg-accent text-white font-medium" : "text-dim hover:text-cream"}`}>
-            {t === "upcoming" ? "Proximos" : "Passados"}
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Sidebar */}
+        <div className="w-full lg:w-64 shrink-0 space-y-4">
+          {/* Mini Calendar */}
+          <MiniCalendar events={events} selectedDate={selectedDate} onSelect={(d) => { setSelectedDate(d); setView("day"); }} />
 
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-accent" /><span className="ml-2 text-sm text-dim">Carregando agenda...</span>
+          {/* View tabs */}
+          <div className="rounded-xl ring-1 ring-[var(--border-color)] bg-bg-card overflow-hidden">
+            {([
+              { key: "upcoming" as const, label: "Próximos", count: upcomingCount },
+              { key: "past" as const, label: "Passados", count: pastCount },
+            ]).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setView(t.key)}
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${view === t.key ? "bg-accent/10 text-accent font-medium" : "text-dim hover:text-cream hover:bg-bg-elevated"}`}
+              >
+                <span>{t.label}</span>
+                <span className={`text-[10px] font-mono ${view === t.key ? "text-accent" : "text-dim/50"}`}>{t.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Type filters */}
+          <div className="rounded-xl ring-1 ring-[var(--border-color)] bg-bg-card p-3 space-y-1">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-dim block mb-2">Tipo</span>
+            <button onClick={() => setTypeFilter("all")} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${typeFilter === "all" ? "bg-accent/10 text-accent font-medium" : "text-dim hover:text-cream"}`}>
+              <span className="w-2 h-2 rounded-full bg-dim" /> Todos
+            </button>
+            {Object.entries(typeLabels).map(([key, label]) => (
+              <button key={key} onClick={() => setTypeFilter(key)} className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${typeFilter === key ? "bg-accent/10 text-accent font-medium" : "text-dim hover:text-cream"}`}>
+                <span className={`w-2 h-2 rounded-full ${typeColorDot[key]}`} /> {label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
 
-      {!loading && (
-        <div className="grid gap-4">
-          {filtered.length === 0 && (
-            <Card><CardContent><p className="text-dim text-sm text-center py-4">Nenhum evento {tab === "upcoming" ? "proximo" : "passado"} encontrado.</p></CardContent></Card>
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          {/* Day view header */}
+          {view === "day" && (
+            <div className="flex items-center gap-3 mb-4">
+              <button onClick={() => setView("upcoming")} className="text-xs text-accent hover:underline">← Voltar</button>
+              <h3 className="text-sm font-semibold text-cream">
+                {selectedDate.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              </h3>
+              {isSameDay(selectedDate, now) && <span className="text-[9px] font-bold text-accent bg-accent/10 px-1.5 py-0.5 rounded">HOJE</span>}
+            </div>
           )}
 
-          {filtered.map(event => {
-            const isPast = event.startDate < now;
-            const isFull = event.maxAttendees != null && confirmed(event) >= event.maxAttendees;
-            const typeKey = event.eventType || "meeting";
-            const isExpanded = expandedEvent === event.id;
-            const isOnline = event.locationType === "online" || event.locationType === "hibrido";
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-5 h-5 animate-spin text-accent" /><span className="ml-2 text-sm text-dim">Carregando...</span>
+            </div>
+          )}
 
-            return (
-              <Card key={event.id} className="overflow-hidden transition-colors">
-                {event.imageUrl && (
-                  <div className="h-40 overflow-hidden"><img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" /></div>
-                )}
-                <CardContent className="space-y-3">
-                  <div className="flex flex-col md:flex-row md:items-start gap-4">
-                    <div className="flex-shrink-0 relative">
-                      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-full ${typeColors[typeKey]}`} />
-                      <div className="w-16 h-16 flex flex-col items-center justify-center bg-accent/10 rounded-xl ml-1">
-                        <span className="text-xs font-semibold uppercase text-accent">{fmt(event.startDate, { month: "short" })}</span>
-                        <span className="text-xl font-bold font-mono text-cream">{new Date(event.startDate).getDate()}</span>
-                      </div>
-                    </div>
+          {!loading && filtered.length === 0 && (
+            <div className="text-center py-16 rounded-xl ring-1 ring-[var(--border-color)] bg-bg-card">
+              <Calendar className="w-10 h-10 text-dim/30 mx-auto mb-3" />
+              <p className="text-dim text-sm">Nenhum evento {view === "upcoming" ? "próximo" : view === "past" ? "passado" : "neste dia"}</p>
+              {view === "day" && <button onClick={() => { setShowModal(true); }} className="text-xs text-accent hover:underline mt-2">Criar evento para este dia</button>}
+            </div>
+          )}
 
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-semibold text-cream">{event.title}</h3>
-                        <Badge variant={typeBadgeVariant[typeKey] || "default"}>{typeLabels[typeKey] || typeKey}</Badge>
-                        {event.visibility === "personal" && <Badge variant="default"><Lock className="w-3 h-3 mr-1" />Convidados</Badge>}
-                        {isOnline && <Badge variant="info"><Video className="w-3 h-3 mr-1" />Online</Badge>}
-                      </div>
-
-                      <div className="flex items-center gap-4 text-xs text-dim flex-wrap">
-                        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{fmt(event.startDate, { weekday: "short", day: "numeric", month: "short" })} · {fmtTime(event.startDate)}{event.endDate && ` – ${fmtTime(event.endDate)}`}</span>
-                        {event.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>}
-                        {event.meetingUrl && <a href={event.meetingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline"><Link2 className="w-3 h-3" />Entrar na reuniao</a>}
-                        {event.speaker && <span className="inline-flex items-center gap-1"><Mic className="w-3 h-3" />{event.speakerTitle ? `${event.speakerTitle} ` : ""}{event.speaker}</span>}
-                      </div>
-
-                      {event.description && <p className="text-xs text-dim line-clamp-2">{event.description}</p>}
-
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="inline-flex items-center gap-1 text-emerald-400"><Check className="w-3 h-3" />{confirmed(event)} confirmados</span>
-                        {maybe(event) > 0 && <span className="inline-flex items-center gap-1 text-amber-400"><HelpCircle className="w-3 h-3" />{maybe(event)} talvez</span>}
-                        {event.maxAttendees && <span className="text-dim">/ {event.maxAttendees} vagas</span>}
-                        {event.creatorName && <span className="text-dim ml-auto">por {event.creatorName}</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
-                      {!isPast && (
-                        <div className="flex items-center gap-1.5">
-                          {respondingTo === event.id ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : (
-                            <>
-                              <button onClick={() => handleRespond(event.id, "confirmed")} disabled={isFull && event.myStatus !== "confirmed"} className={`p-2 rounded-lg border transition-colors ${event.myStatus === "confirmed" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[var(--border-color)] text-dim hover:border-emerald-500/20 hover:text-emerald-400"}`} title="Confirmar"><Check className="w-4 h-4" /></button>
-                              <button onClick={() => handleRespond(event.id, "maybe")} className={`p-2 rounded-lg border transition-colors ${event.myStatus === "maybe" ? "border-amber-500/30 bg-amber-500/10 text-amber-400" : "border-[var(--border-color)] text-dim hover:border-amber-500/20 hover:text-amber-400"}`} title="Talvez"><HelpCircle className="w-4 h-4" /></button>
-                              <button onClick={() => handleRespond(event.id, "declined")} className={`p-2 rounded-lg border transition-colors ${event.myStatus === "declined" ? "border-red-500/30 bg-red-500/10 text-red-400" : "border-[var(--border-color)] text-dim hover:border-red-500/20 hover:text-red-400"}`} title="Recusar"><XCircle className="w-4 h-4" /></button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setExpandedEvent(isExpanded ? null : event.id)} className="p-1.5 text-dim hover:text-cream transition-colors"><ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></button>
-                        <button onClick={() => handleDelete(event.id)} className="p-1.5 text-dim hover:text-red-400 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
+          {!loading && view === "upcoming" && grouped && (
+            <div className="space-y-6">
+              {grouped.map(group => (
+                <div key={group.label}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-2 h-2 rounded-full ${group.color}`} />
+                    <h3 className="text-xs font-semibold uppercase tracking-[0.15em] text-dim">{group.label}</h3>
+                    <span className="text-[10px] text-dim/40">{group.items.length}</span>
+                    <div className="flex-1 border-t border-[var(--border-color)] ml-1" />
                   </div>
+                  <div className="space-y-3">
+                    {group.items.map(renderEventCard)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-                  {isExpanded && (
-                    <div className="pt-3 border-t border-[var(--border-color)]">
-                      {event.attendees.length > 0 ? (
-                        <>
-                          <span className="text-xs font-medium text-cream/80 block mb-2">Participantes</span>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {event.attendees.map(a => (
-                              <div key={a.userId} className="flex items-center gap-2 p-2 rounded-lg bg-bg-elevated">
-                                {a.avatar ? <img src={a.avatar} alt="" className="w-6 h-6 rounded-full object-cover" /> : <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-[10px] text-accent font-medium">{(a.name || "?")[0].toUpperCase()}</div>}
-                                <span className="text-xs text-cream truncate flex-1">{a.name || "—"}</span>
-                                <span className={`w-2 h-2 rounded-full ${a.status === "confirmed" ? "bg-emerald-400" : a.status === "maybe" ? "bg-amber-400" : a.status === "declined" ? "bg-red-400" : a.status === "invited" ? "bg-blue-400" : "bg-dim"}`} />
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-xs text-dim text-center py-2">Nenhum participante ainda.</p>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+          {!loading && (view === "past" || view === "day") && filtered.length > 0 && (
+            <div className="space-y-3">
+              {filtered.map(renderEventCard)}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
