@@ -35,6 +35,7 @@ import {
   Eye,
   EyeOff,
   ClipboardList,
+  Check,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -966,6 +967,397 @@ function AddTaskModal({
   );
 }
 
+// ─── Edit Task Modal ───────────────────────────────────────────────────────
+
+function EditTaskModal({
+  open,
+  onClose,
+  journeyId,
+  stageId,
+  task,
+  onUpdated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  journeyId: string;
+  stageId: string;
+  task: TaskRow;
+  onUpdated: () => void;
+}) {
+  const [name, setName] = useState(task.name);
+  const [description, setDescription] = useState(task.description || "");
+  const [materialUrl, setMaterialUrl] = useState(task.materialUrl || "");
+  const [materialFileName, setMaterialFileName] = useState(task.materialFileName || "");
+  const [materialFileSize, setMaterialFileSize] = useState(task.materialFileSize || 0);
+  const [videoUrl, setVideoUrl] = useState((task.config as Record<string, unknown>)?.video_url as string || "");
+  const [saving, setSaving] = useState(false);
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
+
+  // Quiz state
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [newQuestion, setNewQuestion] = useState("");
+  const [newQuestionType, setNewQuestionType] = useState<"multiple_choice" | "true_false" | "open_text">("multiple_choice");
+  const [newOptions, setNewOptions] = useState([
+    { label: "A", text: "" },
+    { label: "B", text: "" },
+    { label: "C", text: "" },
+    { label: "D", text: "" },
+  ]);
+  const [newCorrectAnswer, setNewCorrectAnswer] = useState("");
+  const [addingQuestion, setAddingQuestion] = useState(false);
+
+  // Reset when task changes
+  useEffect(() => {
+    if (open) {
+      setName(task.name);
+      setDescription(task.description || "");
+      setMaterialUrl(task.materialUrl || "");
+      setMaterialFileName(task.materialFileName || "");
+      setMaterialFileSize(task.materialFileSize || 0);
+      setVideoUrl((task.config as Record<string, unknown>)?.video_url as string || "");
+      if (task.taskType === "quiz") {
+        fetchQuestions();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task.id]);
+
+  const fetchQuestions = async () => {
+    setLoadingQuestions(true);
+    try {
+      const res = await fetch(`/api/journeys/${journeyId}/stages/${stageId}/tasks/${task.id}/questions`);
+      if (res.ok) {
+        setQuestions(await res.json());
+      }
+    } catch { /* silent */ }
+    finally { setLoadingQuestions(false); }
+  };
+
+  const handleMaterialUpload = async (file: File) => {
+    setUploadingMaterial(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch("/api/upload/journey", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const { url, fileName, fileSize } = await uploadRes.json();
+      setMaterialUrl(url);
+      setMaterialFileName(fileName);
+      setMaterialFileSize(fileSize);
+    } catch { /* silent */ }
+    finally { setUploadingMaterial(false); }
+  };
+
+  const handleRemoveMaterial = () => {
+    setMaterialUrl("");
+    setMaterialFileName("");
+    setMaterialFileSize(0);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        name,
+        description: description || null,
+        material_url: materialUrl || null,
+        material_file_name: materialFileName || null,
+        material_file_size: materialFileSize || null,
+      };
+      if (task.taskType === "video" && videoUrl) {
+        body.config = { ...((task.config as Record<string, unknown>) || {}), video_url: videoUrl };
+      }
+      await fetch(`/api/journeys/${journeyId}/stages/${stageId}/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      onUpdated();
+      onClose();
+    } catch { /* silent */ }
+    finally { setSaving(false); }
+  };
+
+  const handleAddQuestion = async () => {
+    if (!newQuestion.trim()) return;
+    setAddingQuestion(true);
+    try {
+      const body: Record<string, unknown> = {
+        question: newQuestion,
+        question_type: newQuestionType,
+      };
+      if (newQuestionType === "multiple_choice") {
+        body.options = newOptions.filter((o) => o.text.trim());
+        body.correct_answer = newCorrectAnswer;
+      } else if (newQuestionType === "true_false") {
+        body.options = [{ label: "V", text: "Verdadeiro" }, { label: "F", text: "Falso" }];
+        body.correct_answer = newCorrectAnswer;
+      }
+      const res = await fetch(`/api/journeys/${journeyId}/stages/${stageId}/tasks/${task.id}/questions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setNewQuestion("");
+        setNewCorrectAnswer("");
+        setNewOptions([{ label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" }]);
+        fetchQuestions();
+      }
+    } catch { /* silent */ }
+    finally { setAddingQuestion(false); }
+  };
+
+  const handleDeleteQuestion = async (questionId: string) => {
+    await fetch(`/api/journeys/${journeyId}/stages/${stageId}/tasks/${task.id}/questions?questionId=${questionId}`, {
+      method: "DELETE",
+    });
+    fetchQuestions();
+  };
+
+  const taskTypeColorMap: Record<string, string> = {
+    text: "#3B82F6", file: "#10B981", link: "#8B5CF6", quiz: "#F59E0B",
+    checklist: "#EF4444", video: "#6366F1", attendance: "#EC4899", material: "#0D9488",
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      headerColor={taskTypeColorMap[task.taskType] || "#C4A882"}
+      headerTitle={`Editar: ${task.name}`}
+      footer={
+        <>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-dim hover:text-cream transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!name || saving}
+            className="px-5 py-2 bg-accent text-white rounded-xl text-sm font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            Salvar
+          </button>
+        </>
+      }
+    >
+      {/* Name */}
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nome da tarefa"
+        className="w-full text-xl font-medium text-cream bg-transparent border-none outline-none placeholder:text-dim/40"
+      />
+
+      {/* Description */}
+      <div className="flex items-start gap-3">
+        <AlignLeft className="w-4 h-4 mt-2.5 text-accent flex-shrink-0" />
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Descricao ou instrucoes"
+          rows={2}
+          className={`${inputCls} resize-none`}
+        />
+      </div>
+
+      {/* Material upload — for material, video types */}
+      {(task.taskType === "material" || task.taskType === "video") && (
+        <div className="space-y-3 pt-3 border-t border-[var(--border-color)]">
+          <span className="text-[10px] uppercase tracking-wider text-dim">
+            {task.taskType === "material" ? "Arquivo do material" : "Arquivo de aula"}
+          </span>
+          {materialUrl ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-bg-elevated">
+              <File className="w-4 h-4 text-accent flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-cream truncate">{materialFileName}</p>
+                {materialFileSize > 0 && (
+                  <p className="text-[10px] text-dim">{(materialFileSize / 1024).toFixed(0)}KB</p>
+                )}
+              </div>
+              <a href={materialUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-lg text-dim hover:text-accent hover:bg-accent/10 transition-colors">
+                <Download className="w-3.5 h-3.5" />
+              </a>
+              <button onClick={handleRemoveMaterial} className="p-1 rounded hover:bg-danger/10 text-dim hover:text-danger transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[var(--border-color)] text-sm text-dim hover:text-cream hover:border-accent/30 transition-colors cursor-pointer">
+              {uploadingMaterial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {uploadingMaterial ? "Enviando..." : "Fazer upload do material"}
+              <input
+                type="file"
+                className="hidden"
+                disabled={uploadingMaterial}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleMaterialUpload(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+
+          {task.taskType === "video" && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-dim block mb-1">
+                Ou cole URL do video
+              </label>
+              <input
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://youtube.com/... ou https://vimeo.com/..."
+                className={inputCls}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quiz Questions Management */}
+      {task.taskType === "quiz" && (
+        <div className="space-y-4 pt-3 border-t border-[var(--border-color)]">
+          <span className="text-[10px] uppercase tracking-wider text-dim">
+            Questoes ({questions.length})
+          </span>
+
+          {/* Existing questions */}
+          {loadingQuestions ? (
+            <div className="flex items-center gap-2 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-dim" />
+              <span className="text-xs text-dim">Carregando...</span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {questions.map((q, idx) => (
+                <div key={q.id} className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-bg-elevated">
+                  <span className="text-xs text-accent font-bold mt-0.5">{idx + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-cream">{q.question}</p>
+                    {q.options && q.options.length > 0 && (
+                      <div className="mt-1.5 space-y-0.5">
+                        {q.options.map((opt) => (
+                          <p key={opt.label} className={`text-xs ${q.correctAnswer === opt.label ? "text-emerald-400 font-medium" : "text-dim"}`}>
+                            {opt.label}) {opt.text} {q.correctAnswer === opt.label ? "✓" : ""}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-dim">
+                        {q.questionType === "multiple_choice" ? "Multipla escolha" : q.questionType === "true_false" ? "V ou F" : "Texto aberto"}
+                      </span>
+                      <span className="text-[10px] text-dim">{q.points} pt{q.points !== 1 ? "s" : ""}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteQuestion(q.id)} className="p-1 rounded hover:bg-danger/10 text-dim hover:text-danger transition-colors flex-shrink-0">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add new question */}
+          <div className="space-y-3 p-3 rounded-xl border border-dashed border-[var(--border-color)]">
+            <span className="text-[10px] uppercase tracking-wider text-dim">Nova questao</span>
+
+            {/* Question type */}
+            <div className="flex gap-2">
+              {([["multiple_choice", "Multipla escolha"], ["true_false", "V ou F"], ["open_text", "Texto aberto"]] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setNewQuestionType(val)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                    newQuestionType === val
+                      ? "bg-accent/15 text-accent border border-accent/25"
+                      : "bg-bg-elevated text-dim hover:text-cream"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Question text */}
+            <textarea
+              value={newQuestion}
+              onChange={(e) => setNewQuestion(e.target.value)}
+              placeholder="Escreva a pergunta..."
+              rows={2}
+              className={`${inputCls} resize-none`}
+            />
+
+            {/* Options for multiple choice */}
+            {newQuestionType === "multiple_choice" && (
+              <div className="space-y-2">
+                {newOptions.map((opt, idx) => (
+                  <div key={opt.label} className="flex items-center gap-2">
+                    <button
+                      onClick={() => setNewCorrectAnswer(opt.label)}
+                      className={`w-6 h-6 rounded-full text-[10px] font-bold flex-shrink-0 transition-all ${
+                        newCorrectAnswer === opt.label
+                          ? "bg-emerald-500 text-white"
+                          : "bg-bg-elevated text-dim border border-[var(--border-color)]"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                    <input
+                      value={opt.text}
+                      onChange={(e) => {
+                        const updated = [...newOptions];
+                        updated[idx] = { ...opt, text: e.target.value };
+                        setNewOptions(updated);
+                      }}
+                      placeholder={`Opcao ${opt.label}`}
+                      className={`${inputCls} flex-1`}
+                    />
+                  </div>
+                ))}
+                <p className="text-[10px] text-dim">Clique na letra para marcar a resposta correta</p>
+              </div>
+            )}
+
+            {/* Options for true/false */}
+            {newQuestionType === "true_false" && (
+              <div className="flex gap-3">
+                {[["V", "Verdadeiro"], ["F", "Falso"]].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setNewCorrectAnswer(val)}
+                    className={`flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                      newCorrectAnswer === val
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25"
+                        : "bg-bg-elevated text-dim hover:text-cream"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Add button */}
+            <button
+              onClick={handleAddQuestion}
+              disabled={!newQuestion.trim() || addingQuestion}
+              className="w-full px-4 py-2 bg-accent/10 text-accent rounded-xl text-sm font-medium hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+            >
+              {addingQuestion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Adicionar questao
+            </button>
+          </div>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export default function JourneyBuilderPage() {
@@ -1019,6 +1411,11 @@ export default function JourneyBuilderPage() {
     stageId: string;
     nextOrder: number;
   }>({ open: false, stageId: "", nextOrder: 0 });
+  const [editModal, setEditModal] = useState<{
+    open: boolean;
+    stageId: string;
+    task: TaskRow | null;
+  }>({ open: false, stageId: "", task: null });
 
   const fetchJourney = useCallback(async () => {
     try {
@@ -1368,7 +1765,8 @@ export default function JourneyBuilderPage() {
                     return (
                       <div
                         key={task.id}
-                        className={`flex items-center gap-3 px-6 py-3 border-b border-[var(--border-color)] last:border-b-0 hover:bg-bg-elevated/30 transition-colors ${!isReleased ? "opacity-50" : ""}`}
+                        className={`flex items-center gap-3 px-6 py-3 border-b border-[var(--border-color)] last:border-b-0 hover:bg-bg-elevated/30 transition-colors cursor-pointer ${!isReleased ? "opacity-50" : ""}`}
+                        onClick={() => isAdmin && setEditModal({ open: true, stageId: stage.id, task })}
                       >
                         {/* Grip */}
                         {isAdmin && <GripVertical className="w-3.5 h-3.5 text-dim/40 flex-shrink-0" />}
@@ -1380,6 +1778,9 @@ export default function JourneyBuilderPage() {
                         <span className="text-sm text-cream flex-1">
                           {task.name}
                         </span>
+
+                        {/* Edit hint */}
+                        {isAdmin && <Pencil className="w-3 h-3 text-dim/30 flex-shrink-0" />}
 
                         {/* Material indicator */}
                         {task.materialUrl && (
@@ -1566,6 +1967,19 @@ export default function JourneyBuilderPage() {
         nextOrder={taskModal.nextOrder}
         onCreated={fetchJourney}
       />
+
+      {editModal.task && (
+        <EditTaskModal
+          open={editModal.open}
+          onClose={() =>
+            setEditModal({ open: false, stageId: "", task: null })
+          }
+          journeyId={journeyId}
+          stageId={editModal.stageId}
+          task={editModal.task}
+          onUpdated={fetchJourney}
+        />
+      )}
     </div>
   );
 }
