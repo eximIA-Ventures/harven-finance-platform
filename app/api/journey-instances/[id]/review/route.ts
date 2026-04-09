@@ -88,11 +88,15 @@ export async function POST(
       if (task) {
         const stageId = task.stageId;
 
-        // Get all required tasks in this stage
+        // Get all required tasks in this stage (exclude material/video — view-only, no submission)
         const stageTasks = await db
           .select()
           .from(journeyTasks)
           .where(and(eq(journeyTasks.stageId, stageId), eq(journeyTasks.isRequired, 1)));
+
+        const submittableRequired = stageTasks.filter(
+          (t) => t.taskType !== "material" && t.taskType !== "video"
+        );
 
         // Check how many are approved for this user in this instance
         const userSubmissions = await db
@@ -107,7 +111,7 @@ export async function POST(
           );
 
         const approvedTaskIds = new Set(userSubmissions.map((s) => s.taskId));
-        const allRequiredDone = stageTasks.every((t) => approvedTaskIds.has(t.id));
+        const allRequiredDone = submittableRequired.every((t) => approvedTaskIds.has(t.id));
 
         if (allRequiredDone) {
           // Find next stage

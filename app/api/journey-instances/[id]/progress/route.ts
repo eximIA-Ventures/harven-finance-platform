@@ -116,6 +116,10 @@ export async function GET(
             });
           }
 
+          // Material and video tasks are view-only — auto-approved (no submission needed)
+          const isViewOnly = task.taskType === "material" || task.taskType === "video";
+          const resolvedStatus = isViewOnly ? "approved" : (effectiveSub?.status || "pending");
+
           return {
             taskId: task.id,
             taskName: task.name,
@@ -127,7 +131,7 @@ export async function GET(
             maxScore: task.maxScore,
             config: parsedConfig,
             dueDate: task.dueDate || null,
-            status: effectiveSub?.status || "pending",
+            status: resolvedStatus,
             score: effectiveSub?.score || null,
             submittedAt: effectiveSub?.submittedAt || null,
             content: effectiveSub?.content || null,
