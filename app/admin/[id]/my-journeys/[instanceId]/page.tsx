@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, Check, CheckCircle2, Circle, Clock, Lock,
   FileText, Upload, Link2, HelpCircle, CheckSquare, AlertCircle,
-  Star, Send, LayoutGrid, Users, ExternalLink, Info, Play, Download,
+  Star, Send, LayoutGrid, Users, ExternalLink, Info, Play, Download, X,
 } from "lucide-react";
 
 // --- Types ------------------------------------------------------------------
@@ -153,7 +153,8 @@ export default function TaskViewPage() {
     setSubmitting(task.taskId);
     try {
       const body: Record<string, unknown> = { task_id: task.taskId };
-      if (task.taskType === "text" || task.taskType === "attendance" || task.taskType === "quiz") body.content = input.content;
+      if (task.taskType === "text" || task.taskType === "attendance" || task.taskType === "quiz") body.content = input.content || null;
+      if (task.taskType === "quiz" && input.file_url) { body.file_url = input.file_url; body.file_name = input.file_name || "prova-foto"; }
       if (task.taskType === "link") body.link_url = input.link_url;
       if (task.taskType === "file") { body.file_url = input.file_url; body.file_name = input.file_url.split("/").pop() || "arquivo"; }
       const res = await fetch(`/api/journey-instances/${instanceId}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -630,7 +631,29 @@ export default function TaskViewPage() {
                             })}
                           </div>
                         )}
-                        {task.taskType === "quiz" && !cfg?.questions && (
+                        {/* Quiz — file/photo upload option (for paper-based answers) */}
+                        {task.taskType === "quiz" && (
+                          <div className="space-y-2">
+                            <span className="text-[10px] uppercase tracking-wider text-dim">Ou envie foto/arquivo da prova em papel</span>
+                            {input.file_url ? (
+                              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)]">
+                                <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
+                                <span className="text-xs text-cream flex-1 truncate">{input.file_name || "Arquivo enviado"}</span>
+                                <button onClick={() => { setInput(task.taskId, "file_url", ""); setInput(task.taskId, "file_name", ""); }} className="p-1 text-dim hover:text-red-400 transition-colors">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[var(--border-color)] text-sm text-dim hover:text-cream hover:border-accent/30 transition-colors cursor-pointer ${uploading === task.taskId ? "opacity-50" : ""}`}>
+                                {uploading === task.taskId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                {uploading === task.taskId ? "Enviando..." : "Enviar foto ou arquivo"}
+                                <input type="file" className="hidden" accept="image/*,.pdf,.jpg,.jpeg,.png,.heic" disabled={uploading === task.taskId}
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(task.taskId, f); e.target.value = ""; }} />
+                              </label>
+                            )}
+                          </div>
+                        )}
+                        {task.taskType === "quiz" && !cfg?.questions && !input.file_url && (
                           <div className="bg-bg-elevated rounded-xl p-4 text-center"><HelpCircle className="w-6 h-6 text-dim/30 mx-auto mb-2" /><p className="text-xs text-dim">Quiz sera configurado pelo instrutor</p></div>
                         )}
 
@@ -707,7 +730,7 @@ export default function TaskViewPage() {
                         {/* Submit button */}
                         {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist", "attendance", "quiz"].includes(task.taskType) && (
                           <div className="flex justify-end">
-                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content) || (task.taskType === "quiz" && !input.content)}
+                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content) || (task.taskType === "quiz" && !input.content && !input.file_url)}
                               className="px-4 py-2 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2">
                               {isSubmittingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
                             </button>
