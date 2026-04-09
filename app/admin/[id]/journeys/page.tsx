@@ -25,6 +25,7 @@ type JourneyType =
   | "investment-thesis"
   | "trainee-onboarding"
   | "nucleus-project"
+  | "capacitacao"
   | "custom";
 
 interface JourneyRow {
@@ -55,6 +56,7 @@ const typeLabels: Record<string, string> = {
   "investment-thesis": "Investment Thesis",
   "trainee-onboarding": "Trainee Onboarding",
   "nucleus-project": "Nucleus Project",
+  capacitacao: "Capacitacao",
   custom: "Custom",
 };
 
@@ -63,6 +65,7 @@ const typeColors: Record<string, string> = {
   "investment-thesis": "bg-blue-500",
   "trainee-onboarding": "bg-emerald-500",
   "nucleus-project": "bg-purple-500",
+  capacitacao: "bg-teal-500",
   custom: "bg-amber-500",
 };
 
@@ -74,6 +77,7 @@ const typeBadgeVariant: Record<
   "investment-thesis": "info",
   "trainee-onboarding": "success",
   "nucleus-project": "accent",
+  capacitacao: "info",
   custom: "default",
 };
 
@@ -223,6 +227,7 @@ function CreateJourneyModal({
                   "investment-thesis",
                   "trainee-onboarding",
                   "nucleus-project",
+                  "capacitacao",
                   "custom",
                 ] as const
               ).map((t) => (

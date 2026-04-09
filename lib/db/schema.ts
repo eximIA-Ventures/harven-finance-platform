@@ -444,6 +444,26 @@ export const journeyTasks = pgTable("journey_tasks", {
   maxScore: real("max_score").default(10),
   weight: real("weight").default(1),
   dueDate: text("due_date"), // ISO date — when this task is due
+  materialUrl: text("material_url"), // admin-uploaded file URL (slides, templates, etc.)
+  materialFileName: text("material_file_name"),
+  materialFileSize: integer("material_file_size"),
+  isReleased: integer("is_released").default(1), // 0 = locked, 1 = visible to participants
+});
+
+// ============================================================================
+// QUIZ QUESTIONS — questions within quiz-type tasks
+// ============================================================================
+export const quizQuestions = pgTable("quiz_questions", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id")
+    .notNull()
+    .references(() => journeyTasks.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  questionType: text("question_type").notNull().default("multiple_choice"), // multiple_choice | true_false | open_text
+  options: text("options"), // JSON array: [{ label: "A", text: "..." }, ...]
+  correctAnswer: text("correct_answer"), // index or text depending on type
+  sortOrder: integer("sort_order").notNull().default(0),
+  points: real("points").default(1),
 });
 
 // ============================================================================

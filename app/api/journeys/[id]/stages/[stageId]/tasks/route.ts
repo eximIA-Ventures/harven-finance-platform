@@ -44,6 +44,10 @@ export async function POST(
       config: v.data.config ? JSON.stringify(v.data.config) : null,
       maxScore: v.data.max_score ?? 10,
       weight: v.data.weight ?? 1,
+      materialUrl: v.data.material_url || null,
+      materialFileName: v.data.material_file_name || null,
+      materialFileSize: v.data.material_file_size || null,
+      isReleased: v.data.is_released === false ? 0 : 1,
     });
 
     return NextResponse.json({ id: taskId }, { status: 201 });

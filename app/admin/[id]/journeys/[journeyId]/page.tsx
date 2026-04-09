@@ -32,6 +32,9 @@ import {
   File,
   Download,
   FolderOpen,
+  Eye,
+  EyeOff,
+  ClipboardList,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -52,6 +55,10 @@ interface TaskRow {
   config: Record<string, unknown> | null;
   maxScore: number;
   weight: number;
+  materialUrl: string | null;
+  materialFileName: string | null;
+  materialFileSize: number | null;
+  isReleased: number;
 }
 
 interface StageRow {
@@ -106,6 +113,7 @@ const typeLabels: Record<string, string> = {
   "investment-thesis": "Investment Thesis",
   "trainee-onboarding": "Trainee Onboarding",
   "nucleus-project": "Nucleus Project",
+  capacitacao: "Capacitacao",
   custom: "Custom",
 };
 
@@ -114,6 +122,7 @@ const typeColors: Record<string, string> = {
   "investment-thesis": "bg-blue-500",
   "trainee-onboarding": "bg-emerald-500",
   "nucleus-project": "bg-purple-500",
+  capacitacao: "bg-teal-500",
   custom: "bg-amber-500",
 };
 
@@ -122,6 +131,7 @@ const typeBadgeVariant: Record<string, "warning" | "info" | "success" | "accent"
   "investment-thesis": "info",
   "trainee-onboarding": "success",
   "nucleus-project": "accent",
+  capacitacao: "info",
   custom: "default",
 };
 
@@ -198,6 +208,16 @@ const emptyStageForm: StageFormState = {
 
 // ─── Task Form ──────────────────────────────────────────────────────────────
 
+interface QuizQuestion {
+  id: string;
+  question: string;
+  questionType: string;
+  options: { label: string; text: string }[];
+  correctAnswer: string | null;
+  sortOrder: number;
+  points: number;
+}
+
 interface TaskFormState {
   name: string;
   description: string;
@@ -207,6 +227,10 @@ interface TaskFormState {
   max_score: string;
   weight: string;
   config: Record<string, unknown>;
+  material_url: string;
+  material_file_name: string;
+  material_file_size: number | null;
+  is_released: boolean;
 }
 
 const emptyTaskForm: TaskFormState = {
@@ -218,6 +242,10 @@ const emptyTaskForm: TaskFormState = {
   max_score: "10",
   weight: "1",
   config: {},
+  material_url: "",
+  material_file_name: "",
+  material_file_size: null,
+  is_released: true,
 };
 
 // ─── Modal Shell ────────────────────────────────────────────────────────────
@@ -507,6 +535,7 @@ function AddTaskModal({
 }) {
   const [form, setForm] = useState<TaskFormState>(emptyTaskForm);
   const [saving, setSaving] = useState(false);
+  const [uploadingMaterial, setUploadingMaterial] = useState(false);
 
   useEffect(() => {
     if (open) setForm(emptyTaskForm);
@@ -517,6 +546,19 @@ function AddTaskModal({
       ...f,
       config: { ...f.config, [key]: value },
     }));
+  };
+
+  const handleMaterialUpload = async (file: File) => {
+    setUploadingMaterial(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const uploadRes = await fetch("/api/upload/journey", { method: "POST", body: fd });
+      if (!uploadRes.ok) return;
+      const { url, fileName, fileSize } = await uploadRes.json();
+      setForm((f) => ({ ...f, material_url: url, material_file_name: fileName, material_file_size: fileSize }));
+    } catch { /* silent */ }
+    finally { setUploadingMaterial(false); }
   };
 
   const handleCreate = async () => {
@@ -539,6 +581,10 @@ function AddTaskModal({
             config:
               Object.keys(form.config).length > 0 ? form.config : null,
             sort_order: nextOrder,
+            material_url: form.material_url || null,
+            material_file_name: form.material_file_name || null,
+            material_file_size: form.material_file_size || null,
+            is_released: form.is_released,
           }),
         }
       );
@@ -553,16 +599,13 @@ function AddTaskModal({
     }
   };
 
-  const taskTypeColor =
-    form.task_type === "text"
-      ? "#3B82F6"
-      : form.task_type === "file"
-        ? "#10B981"
-        : form.task_type === "link"
-          ? "#8B5CF6"
-          : form.task_type === "quiz"
-            ? "#F59E0B"
-            : "#EF4444";
+  const taskTypeColorMap: Record<string, string> = {
+    text: "#3B82F6", file: "#10B981", link: "#8B5CF6", quiz: "#F59E0B",
+    checklist: "#EF4444", video: "#6366F1", attendance: "#EC4899", material: "#0D9488",
+  };
+  const taskTypeColor = taskTypeColorMap[form.task_type] || "#C4A882";
+
+  const allTaskTypes: TaskType[] = ["material", "video", "quiz", "text", "file", "link", "checklist", "attendance"];
 
   return (
     <ModalShell
@@ -608,27 +651,25 @@ function AddTaskModal({
           Tipo de tarefa
         </span>
         <div className="flex gap-2 flex-wrap">
-          {(["text", "file", "link", "quiz", "checklist"] as const).map(
-            (t) => {
-              const Icon = taskTypeIcons[t];
-              return (
-                <button
-                  key={t}
-                  onClick={() =>
-                    setForm({ ...form, task_type: t, config: {} })
-                  }
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    form.task_type === t
-                      ? "bg-accent/15 text-accent border border-accent/25"
-                      : "bg-bg-elevated text-dim hover:text-cream"
-                  }`}
-                >
-                  <Icon className="w-3 h-3" />
-                  {taskTypeLabels[t]}
-                </button>
-              );
-            }
-          )}
+          {allTaskTypes.map((t) => {
+            const Icon = taskTypeIcons[t] || FileText;
+            return (
+              <button
+                key={t}
+                onClick={() =>
+                  setForm({ ...form, task_type: t, config: {} })
+                }
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 ${
+                  form.task_type === t
+                    ? "bg-accent/15 text-accent border border-accent/25"
+                    : "bg-bg-elevated text-dim hover:text-cream"
+                }`}
+              >
+                <Icon className="w-3 h-3" />
+                {taskTypeLabels[t]}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -654,23 +695,33 @@ function AddTaskModal({
         </div>
       </div>
 
-      {/* Required toggle */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-cream">Obrigatoria</span>
-        <button
-          onClick={() =>
-            setForm({ ...form, is_required: !form.is_required })
-          }
-          className={`relative w-10 h-5 rounded-full transition-colors ${
-            form.is_required ? "bg-accent" : "bg-bg-elevated border border-[var(--border-color)]"
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-              form.is_required ? "left-[22px]" : "left-0.5"
+      {/* Required + Released toggles */}
+      <div className="flex items-center gap-6">
+        <div className="flex items-center justify-between flex-1">
+          <span className="text-sm text-cream">Obrigatoria</span>
+          <button
+            onClick={() => setForm({ ...form, is_required: !form.is_required })}
+            className={`relative w-10 h-5 rounded-full transition-colors ${
+              form.is_required ? "bg-accent" : "bg-bg-elevated border border-[var(--border-color)]"
             }`}
-          />
-        </button>
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.is_required ? "left-[22px]" : "left-0.5"}`} />
+          </button>
+        </div>
+        <div className="flex items-center justify-between flex-1">
+          <span className="text-sm text-cream flex items-center gap-1.5">
+            {form.is_released ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            Liberada
+          </span>
+          <button
+            onClick={() => setForm({ ...form, is_released: !form.is_released })}
+            className={`relative w-10 h-5 rounded-full transition-colors ${
+              form.is_released ? "bg-emerald-500" : "bg-bg-elevated border border-[var(--border-color)]"
+            }`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.is_released ? "left-[22px]" : "left-0.5"}`} />
+          </button>
+        </div>
       </div>
 
       {/* Description */}
@@ -686,6 +737,64 @@ function AddTaskModal({
           className={`${inputCls} resize-none`}
         />
       </div>
+
+      {/* Material upload — for material, video types */}
+      {(form.task_type === "material" || form.task_type === "video") && (
+        <div className="space-y-3 pt-3 border-t border-[var(--border-color)]">
+          <span className="text-[10px] uppercase tracking-wider text-dim">
+            {form.task_type === "material" ? "Arquivo do material" : "Video / Arquivo de aula"}
+          </span>
+          {form.material_url ? (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-bg-elevated">
+              <File className="w-4 h-4 text-accent flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-cream truncate">{form.material_file_name}</p>
+                {form.material_file_size && (
+                  <p className="text-[10px] text-dim">{(form.material_file_size / 1024).toFixed(0)}KB</p>
+                )}
+              </div>
+              <button
+                onClick={() => setForm({ ...form, material_url: "", material_file_name: "", material_file_size: null })}
+                className="p-1 rounded hover:bg-danger/10 text-dim hover:text-danger transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[var(--border-color)] text-sm text-dim hover:text-cream hover:border-accent/30 transition-colors cursor-pointer">
+              {uploadingMaterial ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4" />
+              )}
+              {uploadingMaterial ? "Enviando..." : "Fazer upload"}
+              <input
+                type="file"
+                className="hidden"
+                disabled={uploadingMaterial}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleMaterialUpload(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+          {form.task_type === "video" && (
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-dim block mb-1">
+                Ou cole URL do video
+              </label>
+              <input
+                value={(form.config.video_url as string) || ""}
+                onChange={(e) => updateConfig("video_url", e.target.value)}
+                placeholder="https://youtube.com/... ou https://vimeo.com/..."
+                className={inputCls}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Config section — dynamic by type */}
       <div className="space-y-3 pt-3 border-t border-[var(--border-color)]">
@@ -791,14 +900,26 @@ function AddTaskModal({
         )}
 
         {form.task_type === "quiz" && (
-          <p className="text-xs text-dim italic">
-            Configurar questoes em breve
+          <p className="text-xs text-dim">
+            Crie a tarefa primeiro e depois adicione as questoes diretamente na lista de tarefas.
           </p>
         )}
 
         {form.task_type === "checklist" && (
           <p className="text-xs text-dim italic">
             Configurar itens em breve
+          </p>
+        )}
+
+        {form.task_type === "attendance" && (
+          <p className="text-xs text-dim">
+            Presenca sera registrada automaticamente pelo mentor.
+          </p>
+        )}
+
+        {(form.task_type === "material" || form.task_type === "video") && !form.material_url && !form.config.video_url && (
+          <p className="text-xs text-dim">
+            Suba o arquivo acima para disponibilizar aos participantes.
           </p>
         )}
       </div>
@@ -1123,6 +1244,18 @@ export default function JourneyBuilderPage() {
                 variant="secondary"
                 onClick={() =>
                   router.push(
+                    `/admin/${evalId}/journeys/${journeyId}/responses`
+                  )
+                }
+              >
+                <ClipboardList className="w-4 h-4" />
+                Respostas
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  router.push(
                     `/admin/${evalId}/journeys/${journeyId}/groups`
                   )
                 }
@@ -1231,10 +1364,11 @@ export default function JourneyBuilderPage() {
                   {stage.tasks.map((task) => {
                     const TaskIcon =
                       taskTypeIcons[task.taskType] || FileText;
+                    const isReleased = task.isReleased !== 0;
                     return (
                       <div
                         key={task.id}
-                        className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border-color)] last:border-b-0 hover:bg-bg-elevated/30 transition-colors"
+                        className={`flex items-center gap-3 px-6 py-3 border-b border-[var(--border-color)] last:border-b-0 hover:bg-bg-elevated/30 transition-colors ${!isReleased ? "opacity-50" : ""}`}
                       >
                         {/* Grip */}
                         {isAdmin && <GripVertical className="w-3.5 h-3.5 text-dim/40 flex-shrink-0" />}
@@ -1246,6 +1380,13 @@ export default function JourneyBuilderPage() {
                         <span className="text-sm text-cream flex-1">
                           {task.name}
                         </span>
+
+                        {/* Material indicator */}
+                        {task.materialUrl && (
+                          <a href={task.materialUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1 rounded-lg text-dim hover:text-accent hover:bg-accent/10 transition-colors" title={task.materialFileName || "Material"}>
+                            <File className="w-3 h-3" />
+                          </a>
+                        )}
 
                         {/* Type badge */}
                         <Badge variant="default">
@@ -1264,6 +1405,25 @@ export default function JourneyBuilderPage() {
                           <span className="text-[10px] text-accent font-medium">
                             Obrigatoria
                           </span>
+                        )}
+
+                        {/* Release toggle */}
+                        {isAdmin && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await fetch(`/api/journeys/${journeyId}/stages/${stage.id}/tasks/${task.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ is_released: !isReleased }),
+                              });
+                              fetchJourney();
+                            }}
+                            className={`p-1 rounded transition-colors ${isReleased ? "text-emerald-500 hover:bg-emerald-500/10" : "text-dim hover:bg-bg-elevated"}`}
+                            title={isReleased ? "Liberada — clique para bloquear" : "Bloqueada — clique para liberar"}
+                          >
+                            {isReleased ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          </button>
                         )}
 
                         {/* Delete */}

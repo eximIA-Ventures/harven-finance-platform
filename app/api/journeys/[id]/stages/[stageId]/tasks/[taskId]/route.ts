@@ -35,6 +35,10 @@ export async function PATCH(
         ...(body.config !== undefined && { config: body.config ? JSON.stringify(body.config) : null }),
         ...(body.max_score !== undefined && { maxScore: body.max_score }),
         ...(body.weight !== undefined && { weight: body.weight }),
+        ...(body.material_url !== undefined && { materialUrl: body.material_url }),
+        ...(body.material_file_name !== undefined && { materialFileName: body.material_file_name }),
+        ...(body.material_file_size !== undefined && { materialFileSize: body.material_file_size }),
+        ...(body.is_released !== undefined && { isReleased: body.is_released ? 1 : 0 }),
       })
       .where(eq(journeyTasks.id, taskId));
 

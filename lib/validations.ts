@@ -204,7 +204,7 @@ export const createCompetitionSchema = z.object({
 export const createJourneySchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().optional(),
-  journey_type: z.enum(["case-competition", "investment-thesis", "trainee-onboarding", "nucleus-project", "custom"]).optional(),
+  journey_type: z.enum(["case-competition", "investment-thesis", "trainee-onboarding", "nucleus-project", "capacitacao", "custom"]).optional(),
   color: z.string().optional(),
   icon: z.string().optional(),
   cover_image: z.string().optional(),
@@ -239,12 +239,25 @@ export const createJourneyTaskSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().optional(),
   sort_order: z.number().int().min(0),
-  task_type: z.enum(["text", "file", "link", "quiz", "checklist"]),
+  task_type: z.enum(["text", "file", "link", "quiz", "checklist", "video", "attendance", "material"]),
   is_required: z.boolean().optional(),
   review_type: z.enum(["mentor", "peer", "ai", "auto"]).optional(),
   config: z.record(z.unknown()).optional(),
   max_score: z.number().positive().optional(),
   weight: z.number().positive().optional(),
+  material_url: z.string().optional(),
+  material_file_name: z.string().optional(),
+  material_file_size: z.number().optional(),
+  is_released: z.boolean().optional(),
+});
+
+export const createQuizQuestionSchema = z.object({
+  question: z.string().min(1).max(1000),
+  question_type: z.enum(["multiple_choice", "true_false", "open_text"]).optional(),
+  options: z.array(z.object({ label: z.string(), text: z.string() })).optional(),
+  correct_answer: z.string().optional(),
+  sort_order: z.number().int().min(0).optional(),
+  points: z.number().positive().optional(),
 });
 
 export const createInstanceSchema = z.object({
