@@ -116,9 +116,9 @@ export async function GET(
             });
           }
 
-          // Material and video tasks are view-only — auto-approved (no submission needed)
+          // Material and video tasks are view-only — no status needed
           const isViewOnly = task.taskType === "material" || task.taskType === "video";
-          const resolvedStatus = isViewOnly ? "approved" : (effectiveSub?.status || "pending");
+          const resolvedStatus = isViewOnly ? "view_only" : (effectiveSub?.status || "pending");
 
           return {
             taskId: task.id,
@@ -141,10 +141,10 @@ export async function GET(
           };
         });
 
-        const completedCount = taskStatuses.filter((t) => t.status === "approved").length;
-        const totalRequired = taskStatuses.filter((t) => t.isRequired).length;
+        const completedCount = taskStatuses.filter((t) => t.status === "approved" || t.status === "view_only").length;
+        const totalRequired = taskStatuses.filter((t) => t.isRequired && t.status !== "view_only").length;
         const requiredCompleted = taskStatuses.filter(
-          (t) => t.isRequired && t.status === "approved"
+          (t) => t.isRequired && (t.status === "approved")
         ).length;
 
         return {

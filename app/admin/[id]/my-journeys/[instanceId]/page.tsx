@@ -66,11 +66,12 @@ const inputCls = "w-full px-3 py-2 bg-bg-elevated border border-[var(--border-co
 
 const taskTypeIcons: Record<string, typeof FileText> = { text: FileText, file: Upload, link: Link2, quiz: HelpCircle, checklist: CheckSquare, video: Play, attendance: Users, material: Download };
 const taskTypeLabels: Record<string, string> = { text: "Texto", file: "Arquivo", link: "Link", quiz: "Quiz", checklist: "Checklist", video: "Video", attendance: "Presenca", material: "Material" };
-const statusConfig: Record<string, { label: string; color: string; icon: typeof Circle }> = {
+const statusConfig: Record<string, { label: string; color: string; icon: typeof Circle; hidden?: boolean }> = {
   pending: { label: "Pendente", color: "text-dim/40", icon: Circle },
   submitted: { label: "Em revisao", color: "text-blue-400", icon: Clock },
   approved: { label: "Aprovado", color: "text-success", icon: CheckCircle2 },
   revision_requested: { label: "Revisar", color: "text-warning", icon: AlertCircle },
+  view_only: { label: "", color: "", icon: Circle, hidden: true },
 };
 
 function getInitials(name: string | null): string {
@@ -345,9 +346,11 @@ export default function TaskViewPage() {
                           </div>
                         </div>
                       </div>
-                      <div className={`flex items-center gap-1.5 ${sc.color}`}>
-                        <StatusIcon className="w-3.5 h-3.5" /><span className="text-[10px] font-medium">{sc.label}</span>
-                      </div>
+                      {!sc.hidden && (
+                        <div className={`flex items-center gap-1.5 ${sc.color}`}>
+                          <StatusIcon className="w-3.5 h-3.5" /><span className="text-[10px] font-medium">{sc.label}</span>
+                        </div>
+                      )}
                     </div>
 
                     {task.status === "approved" && (
