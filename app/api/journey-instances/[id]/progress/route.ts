@@ -153,6 +153,7 @@ export async function GET(
           stageDescription: stage.description,
           stageColor: stage.color,
           sortOrder: stage.sortOrder,
+          isReleased: (stage as Record<string, unknown>).isReleased !== 0,
           isCurrent: participant.currentStageId === stage.id,
           tasks: taskStatuses,
           completedCount,

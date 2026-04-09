@@ -39,6 +39,7 @@ interface TaskStatus {
 
 interface StageProgress {
   stageId: string; stageName: string; stageDescription: string | null; stageColor: string | null; sortOrder: number;
+  isReleased?: boolean;
   isCurrent: boolean; tasks: TaskStatus[]; completedCount: number; totalTasks: number;
   totalRequired: number; requiredCompleted: number; stageComplete: boolean;
 }
@@ -168,7 +169,8 @@ export default function TaskViewPage() {
     return (<div className="text-center py-20"><p className="text-dim">Jornada nao encontrada.</p><button onClick={() => router.push(`/admin/${evalId}/my-journeys`)} className="mt-4 text-accent hover:underline text-sm">Voltar</button></div>);
   }
 
-  const selectedStage = progress.stages.find(s => s.stageId === selectedStageId);
+  const visibleStages = progress.stages.filter(s => s.isReleased !== false);
+  const selectedStage = visibleStages.find(s => s.stageId === selectedStageId);
   const unlockedStageIds = new Set<string>();
   for (const stage of progress.stages) { unlockedStageIds.add(stage.stageId); if (!stage.stageComplete) break; }
 
@@ -262,7 +264,7 @@ export default function TaskViewPage() {
 
           {/* Stages card */}
           <div className="bg-bg-card rounded-2xl border border-[var(--border-color)] p-3 space-y-0.5">
-            {progress.stages.map((stage, i) => {
+            {progress.stages.filter(s => s.isReleased !== false).map((stage, i) => {
               const isSelected = stage.stageId === selectedStageId;
               const isUnlocked = unlockedStageIds.has(stage.stageId);
               const isComplete = stage.stageComplete;

@@ -71,6 +71,7 @@ interface StageRow {
   color: string | null;
   estimatedDays: number | null;
   unlockRule: string | null;
+  isReleased: number;
   tasks: TaskRow[];
 }
 
@@ -1616,11 +1617,12 @@ export default function JourneyBuilderPage() {
           const isExpanded = expandedStages.has(stage.id);
           const UnlockIcon =
             unlockRuleIcons[stage.unlockRule || "sequential"];
+          const stageReleased = stage.isReleased !== 0;
 
           return (
             <div
               key={stage.id}
-              className="bg-bg-card rounded-xl border border-[var(--border-color)] overflow-hidden"
+              className={`bg-bg-card rounded-xl border border-[var(--border-color)] overflow-hidden ${!stageReleased ? "opacity-50" : ""}`}
             >
               {/* Stage header */}
               <div
@@ -1666,6 +1668,25 @@ export default function JourneyBuilderPage() {
                   <UnlockIcon className="w-3 h-3" />
                   {unlockRuleLabels[stage.unlockRule || "sequential"]}
                 </Badge>
+
+                {/* Release toggle */}
+                {isAdmin && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await fetch(`/api/journeys/${journeyId}/stages/${stage.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ is_released: !stageReleased }),
+                      });
+                      fetchJourney();
+                    }}
+                    className={`p-1.5 rounded transition-colors ${stageReleased ? "text-emerald-500 hover:bg-emerald-500/10" : "text-dim hover:bg-bg-elevated"}`}
+                    title={stageReleased ? "Modulo visivel — clique para esconder" : "Modulo escondido — clique para liberar"}
+                  >
+                    {stageReleased ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  </button>
+                )}
 
                 {/* Delete */}
                 {isAdmin && (

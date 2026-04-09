@@ -423,6 +423,7 @@ export const journeyStages = pgTable("journey_stages", {
   color: text("color").default("#C4A882"),
   estimatedDays: integer("estimated_days"),
   unlockRule: text("unlock_rule").default("sequential"), // sequential | parallel | manual
+  isReleased: integer("is_released").default(1), // 0 = hidden from participants, 1 = visible
 });
 
 // ============================================================================

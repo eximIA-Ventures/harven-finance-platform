@@ -32,6 +32,7 @@ export async function PATCH(
         ...(body.color !== undefined && { color: body.color }),
         ...(body.estimated_days !== undefined && { estimatedDays: body.estimated_days }),
         ...(body.unlock_rule !== undefined && { unlockRule: body.unlock_rule }),
+        ...(body.is_released !== undefined && { isReleased: body.is_released ? 1 : 0 }),
       })
       .where(eq(journeyStages.id, stageId));
 
