@@ -317,7 +317,8 @@ export default function TaskViewPage() {
                 const TaskIcon = taskTypeIcons[task.taskType] || FileText;
                 const input = getInput(task.taskId);
                 const isSubmittingThis = submitting === task.taskId;
-                const canSubmit = task.status === "pending" || task.status === "revision_requested";
+                const isViewOnly = task.status === "view_only";
+                const canSubmit = task.status === "pending" || task.status === "revision_requested" || isViewOnly;
                 const cfg = task.config;
 
                 return (
