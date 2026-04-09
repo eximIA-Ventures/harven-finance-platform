@@ -52,7 +52,15 @@ interface Member {
   id: string;
   name: string;
   email: string;
+  avatarUrl: string | null;
+  memberStatus: string | null;
 }
+
+const ROLE_OPTIONS = [
+  { key: "presidente", label: "Presidentes" },
+  { key: "vice-presidente", label: "Vice-Presidentes" },
+  { key: "trainee", label: "Trainees" },
+];
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
@@ -123,6 +131,29 @@ export default function ParticipantsPage() {
       }
     } catch { /* silent */ }
     finally { setLoadingMembers(false); }
+  };
+
+  const inviteAll = () => {
+    const available = members.filter((m) => !existingUserIds.has(m.id));
+    setSelectedIds(new Set(available.map((m) => m.id)));
+  };
+
+  const inviteByRole = (role: string) => {
+    const roleMembers = members.filter((m) => m.memberStatus === role && !existingUserIds.has(m.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      roleMembers.forEach((m) => next.add(m.id));
+      return next;
+    });
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleOpenAdd = () => {
@@ -309,8 +340,8 @@ export default function ParticipantsPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/25 backdrop-blur-[6px]" onClick={() => setShowAddModal(false)} style={{ animation: "modal-fade 0.2s ease-out" }} />
-          <div className="relative z-10 w-full max-w-md max-h-[70vh] overflow-hidden" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
-            <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] flex flex-col max-h-[70vh]">
+          <div className="relative z-10 w-full max-w-md max-h-[80vh] overflow-hidden" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
+            <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] flex flex-col max-h-[80vh]">
               {/* Header */}
               <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between flex-shrink-0">
                 <h2 className="text-lg font-semibold text-cream">Adicionar Participantes</h2>
@@ -319,8 +350,48 @@ export default function ParticipantsPage() {
                 </button>
               </div>
 
-              {/* Search */}
-              <div className="px-6 py-3 border-b border-[var(--border-color)] flex-shrink-0">
+              <div className="px-6 py-3 border-b border-[var(--border-color)] flex-shrink-0 space-y-3">
+                {/* Quick invite by role */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-dim">Selecao rapida</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button onClick={inviteAll} className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-bg-elevated text-dim border border-[var(--border-color)] hover:text-cream hover:border-accent/20 transition-all">
+                      Todos
+                    </button>
+                    {ROLE_OPTIONS.map((r) => (
+                      <button key={r.key} onClick={() => inviteByRole(r.key)} className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-bg-elevated text-dim border border-[var(--border-color)] hover:text-cream hover:border-accent/20 transition-all">
+                        {r.label}
+                      </button>
+                    ))}
+                    {selectedIds.size > 0 && (
+                      <button onClick={() => setSelectedIds(new Set())} className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-red-400 border border-red-400/20 hover:bg-red-400/10 transition-all">
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Selected pills */}
+                {selectedIds.size > 0 && (
+                  <div>
+                    <span className="text-[10px] text-dim">{selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}</span>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {Array.from(selectedIds).map((uid) => {
+                        const m = members.find((x) => x.id === uid);
+                        return (
+                          <span key={uid} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent text-[11px] font-medium">
+                            {m?.name || uid}
+                            <button onClick={() => toggleSelected(uid)} className="hover:text-red-400">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Search */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dim" />
                   <input
@@ -330,12 +401,9 @@ export default function ParticipantsPage() {
                     className="w-full pl-9 pr-3 py-2 bg-bg-elevated border border-[var(--border-color)] rounded-xl text-sm text-cream placeholder:text-dim/50 focus:outline-none focus:ring-2 focus:ring-accent/30"
                   />
                 </div>
-                {selectedIds.size > 0 && (
-                  <p className="text-xs text-accent mt-2">{selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}</p>
-                )}
               </div>
 
-              {/* Member list */}
+              {/* Member list with avatars and roles */}
               <div className="flex-1 overflow-y-auto">
                 {loadingMembers ? (
                   <div className="flex items-center justify-center py-8">
@@ -352,27 +420,23 @@ export default function ParticipantsPage() {
                       return (
                         <button
                           key={m.id}
-                          onClick={() => {
-                            setSelectedIds((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(m.id)) next.delete(m.id);
-                              else next.add(m.id);
-                              return next;
-                            });
-                          }}
-                          className="w-full flex items-center gap-3 px-6 py-3 hover:bg-bg-elevated/50 transition-colors text-left"
+                          onClick={() => toggleSelected(m.id)}
+                          className={`w-full flex items-center gap-2.5 px-6 py-2.5 text-left transition-colors ${isSelected ? "bg-accent/5" : "hover:bg-bg-elevated/50"}`}
                         >
-                          <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all ${
-                            isSelected
-                              ? "bg-accent text-white"
-                              : "border border-[var(--border-color)]"
-                          }`}>
-                            {isSelected && <Check className="w-3 h-3" />}
-                          </div>
+                          {m.avatarUrl ? (
+                            <img src={m.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-accent/10 flex items-center justify-center text-[10px] text-accent font-bold flex-shrink-0">
+                              {m.name[0]?.toUpperCase()}
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-cream truncate">{m.name}</p>
-                            <p className="text-[10px] text-dim truncate">{m.email}</p>
+                            <span className="text-xs text-cream block truncate">{m.name}</span>
+                            <span className="text-[10px] text-dim block truncate">
+                              {m.memberStatus || "membro"} &middot; {m.email}
+                            </span>
                           </div>
+                          {isSelected && <Check className="w-4 h-4 text-accent flex-shrink-0" />}
                         </button>
                       );
                     })}
