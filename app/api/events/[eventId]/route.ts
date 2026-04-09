@@ -43,10 +43,25 @@ export async function DELETE(
   { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
-    const auth = await requireMember("admin");
+    const auth = await requireMember();
     if (!auth.ok) return auth.response;
 
     const { eventId } = await params;
+
+    const event = await db.query.events.findFirst({
+      where: eq(events.id, eventId),
+    });
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // Allow deletion by creator or admin
+    const perms = auth.user.permissions || [];
+    const isAdmin = perms.includes("admin") || perms.includes("manage_eval");
+    if (event.createdBy !== auth.user.id && !isAdmin) {
+      return NextResponse.json({ error: "Sem permissao" }, { status: 403 });
+    }
+
     await db.delete(events).where(eq(events.id, eventId));
     return NextResponse.json({ ok: true });
   } catch (error) {
