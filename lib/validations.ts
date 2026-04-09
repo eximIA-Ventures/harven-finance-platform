@@ -237,17 +237,17 @@ export const createStageSchema = z.object({
 
 export const createJourneyTaskSchema = z.object({
   name: z.string().min(1).max(200),
-  description: z.string().optional(),
+  description: z.string().nullable().optional(),
   sort_order: z.number().int().min(0),
   task_type: z.enum(["text", "file", "link", "quiz", "checklist", "video", "attendance", "material"]),
   is_required: z.boolean().optional(),
   review_type: z.enum(["mentor", "peer", "ai", "auto"]).optional(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.unknown()).nullable().optional(),
   max_score: z.number().positive().optional(),
   weight: z.number().positive().optional(),
-  material_url: z.string().optional(),
-  material_file_name: z.string().optional(),
-  material_file_size: z.number().optional(),
+  material_url: z.string().nullable().optional(),
+  material_file_name: z.string().nullable().optional(),
+  material_file_size: z.number().nullable().optional(),
   is_released: z.boolean().optional(),
 });
 
