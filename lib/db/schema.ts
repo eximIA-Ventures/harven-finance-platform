@@ -451,6 +451,23 @@ export const journeyTasks = pgTable("journey_tasks", {
 });
 
 // ============================================================================
+// TASK FILES — multiple files attached to a task by admin
+// ============================================================================
+export const taskFiles = pgTable("task_files", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id")
+    .notNull()
+    .references(() => journeyTasks.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileName: text("file_name").notNull(),
+  fileType: text("file_type"), // pdf | xlsx | docx | pptx | image | video | other
+  fileSize: integer("file_size"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+// ============================================================================
 // QUIZ QUESTIONS — questions within quiz-type tasks
 // ============================================================================
 export const quizQuestions = pgTable("quiz_questions", {

@@ -19,6 +19,8 @@ interface TaskConfig {
   placeholder?: string; minLength?: number; maxLength?: number; hint?: string;
   items?: string[];
   questions?: Array<{ q: string; options?: string[]; answer?: string }>;
+  files?: Array<{ url: string; label: string; fileName?: string; fileSize?: number }>;
+  video_url?: string;
 }
 
 interface MemberTaskStatus {
@@ -653,25 +655,33 @@ export default function TaskViewPage() {
                           </div>
                         )}
 
-                        {/* Material — download-only, no submission */}
+                        {/* Material — download-only, no submission (supports multiple files) */}
                         {task.taskType === "material" && (
                           <div className="space-y-2">
-                            {cfg?.url ? (
-                              <a href={cfg.url as string} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] hover:ring-accent/20 transition-all group">
-                                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
-                                  <Download className="w-5 h-5 text-accent" />
+                            {(() => {
+                              const filesList = (cfg?.files as Array<{url: string; label: string; fileName?: string}>) || [];
+                              const hasLegacy = !filesList.length && cfg?.url;
+                              const allFiles = hasLegacy ? [{ url: cfg.url as string, label: (cfg.label as string) || "Baixar material" }] : filesList;
+                              if (allFiles.length > 0) {
+                                return allFiles.map((f, fIdx) => (
+                                  <a key={fIdx} href={f.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] hover:ring-accent/20 transition-all group">
+                                    <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
+                                      <Download className="w-5 h-5 text-accent" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-cream group-hover:text-accent transition-colors">{f.label || "Baixar material"}</p>
+                                      <p className="text-[10px] text-dim">Clique para baixar</p>
+                                    </div>
+                                  </a>
+                                ));
+                              }
+                              return (
+                                <div className="p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] text-center">
+                                  <Download className="w-5 h-5 text-dim/30 mx-auto mb-1" />
+                                  <p className="text-xs text-dim">Material sera disponibilizado pelo instrutor</p>
                                 </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-cream group-hover:text-accent transition-colors">{(cfg.label as string) || "Baixar material"}</p>
-                                  <p className="text-[10px] text-dim">Clique para baixar</p>
-                                </div>
-                              </a>
-                            ) : (
-                              <div className="p-4 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)] text-center">
-                                <Download className="w-5 h-5 text-dim/30 mx-auto mb-1" />
-                                <p className="text-xs text-dim">Material sera disponibilizado pelo instrutor</p>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         )}
 
