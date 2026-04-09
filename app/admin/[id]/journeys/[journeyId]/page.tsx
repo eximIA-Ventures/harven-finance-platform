@@ -1575,24 +1575,24 @@ export default function JourneyBuilderPage() {
                 variant="secondary"
                 onClick={() =>
                   router.push(
-                    `/admin/${evalId}/journeys/${journeyId}/responses`
+                    `/admin/${evalId}/journeys/${journeyId}/participants`
                   )
                 }
               >
-                <ClipboardList className="w-4 h-4" />
-                Respostas
+                <Users className="w-4 h-4" />
+                Participantes
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() =>
                   router.push(
-                    `/admin/${evalId}/journeys/${journeyId}/groups`
+                    `/admin/${evalId}/journeys/${journeyId}/responses`
                   )
                 }
               >
-                <Users className="w-4 h-4" />
-                Ver Grupos
+                <ClipboardList className="w-4 h-4" />
+                Respostas
               </Button>
               <Button
                 size="sm"
