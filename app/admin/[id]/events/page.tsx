@@ -122,7 +122,7 @@ function CreateEventModal({ open, onClose, onCreated }: { open: boolean; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div ref={backdropRef} className="absolute inset-0 bg-black/25 backdrop-blur-[6px]" onClick={(e) => { if (e.target === backdropRef.current) onClose(); }} style={{ animation: "modal-fade 0.2s ease-out" }} />
+      <div ref={backdropRef} className="absolute inset-0 bg-black/25 backdrop-blur-sm" onClick={(e) => { if (e.target === backdropRef.current) onClose(); }} style={{ animation: "modal-fade 0.2s ease-out" }} />
 
       <div className="relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
         <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)]">
@@ -429,7 +429,7 @@ function EventDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" onClick={onClose} style={{ animation: "modal-fade 0.2s ease-out" }} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} style={{ animation: "modal-fade 0.2s ease-out" }} />
       <div className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
         <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] overflow-hidden">
           {/* Color bar */}

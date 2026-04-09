@@ -174,7 +174,7 @@ export default function CandidatesPage() {
       {/* ── Import Modal ── */}
       {showImport && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-[6px] animate-[modal-fade_0.2s_ease-out]"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 backdrop-blur-sm animate-[modal-fade_0.2s_ease-out]"
           onClick={(e) => { if (e.target === e.currentTarget) closeImportModal(); }}
         >
           <div className="relative w-full max-w-lg mx-4 bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] flex flex-col max-h-[85vh] animate-[modal-scale_0.2s_ease-out]">

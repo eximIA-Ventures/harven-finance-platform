@@ -393,7 +393,7 @@ function ResourceModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         ref={backdropRef}
-        className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"
+        className="absolute inset-0 bg-black/25 backdrop-blur-sm"
         onClick={(e) => {
           if (e.target === backdropRef.current) onClose();
         }}

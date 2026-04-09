@@ -101,9 +101,9 @@ export const addEvaluatorSchema = z.object({
 // ============================================================================
 export const createEventSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().optional(),
-  event_type: z.string().optional(),
-  location: z.string().optional(),
+  description: z.string().nullable().optional(),
+  event_type: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
   start_date: z.string().min(1),
   end_date: z.string().nullable().optional(),
   speaker: z.string().nullable().optional(),

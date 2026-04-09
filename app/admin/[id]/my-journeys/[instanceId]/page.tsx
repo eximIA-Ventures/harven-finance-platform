@@ -92,6 +92,7 @@ export default function TaskViewPage() {
   const [loading, setLoading] = useState(true);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [retakingQuiz, setRetakingQuiz] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [taskInputs, setTaskInputs] = useState<Record<string, { content: string; link_url: string; file_url: string; file_name: string }>>({});
@@ -155,7 +156,7 @@ export default function TaskViewPage() {
       if (task.taskType === "link") body.link_url = input.link_url;
       if (task.taskType === "file") { body.file_url = input.file_url; body.file_name = input.file_url.split("/").pop() || "arquivo"; }
       const res = await fetch(`/api/journey-instances/${instanceId}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (res.ok) { setTaskInputs(prev => { const next = { ...prev }; delete next[task.taskId]; return next; }); await fetchProgress(); }
+      if (res.ok) { setTaskInputs(prev => { const next = { ...prev }; delete next[task.taskId]; return next; }); setRetakingQuiz(prev => { const n = new Set(prev); n.delete(task.taskId); return n; }); await fetchProgress(); }
     } catch { /* silent */ }
     finally { setSubmitting(null); }
   };
@@ -318,7 +319,8 @@ export default function TaskViewPage() {
                 const input = getInput(task.taskId);
                 const isSubmittingThis = submitting === task.taskId;
                 const isViewOnly = task.status === "view_only";
-                const canSubmit = task.status === "pending" || task.status === "revision_requested" || isViewOnly;
+                const isRetakingThis = retakingQuiz.has(task.taskId);
+                const canSubmit = task.status === "pending" || task.status === "revision_requested" || isViewOnly || isRetakingThis;
                 const cfg = task.config;
 
                 return (
@@ -409,6 +411,17 @@ export default function TaskViewPage() {
                           })}
                         </div>
                       </div>
+                    )}
+
+                    {/* Quiz retake button */}
+                    {task.status === "approved" && task.taskType === "quiz" && !isRetakingThis && (
+                      <button
+                        onClick={() => setRetakingQuiz(prev => { const n = new Set(prev); n.add(task.taskId); return n; })}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-accent bg-accent/10 hover:bg-accent/20 transition-colors w-fit"
+                      >
+                        <HelpCircle className="w-4 h-4" />
+                        Responder novamente
+                      </button>
                     )}
 
                     {task.status === "revision_requested" && (

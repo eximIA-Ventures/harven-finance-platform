@@ -339,7 +339,7 @@ export default function ParticipantsPage() {
       {/* Add Participant Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/25 backdrop-blur-[6px]" onClick={() => setShowAddModal(false)} style={{ animation: "modal-fade 0.2s ease-out" }} />
+          <div className="absolute inset-0 bg-black/25 backdrop-blur-sm" onClick={() => setShowAddModal(false)} style={{ animation: "modal-fade 0.2s ease-out" }} />
           <div className="relative z-10 w-full max-w-md max-h-[80vh] overflow-hidden" style={{ animation: "modal-scale 0.25s cubic-bezier(0.16,1,0.3,1)" }}>
             <div className="bg-bg-card rounded-2xl shadow-elevated border border-[var(--border-color)] flex flex-col max-h-[80vh]">
               {/* Header */}
