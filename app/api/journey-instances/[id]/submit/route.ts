@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 import {
   journeyInstances,
   journeyParticipants,
+  journeyStages,
   journeyTasks,
   taskSubmissions,
   taskReviews,
 } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "@/lib/api-auth";
 import { validate, submitJourneyTaskSchema } from "@/lib/validations";
@@ -65,7 +66,8 @@ export async function POST(
     const submissionId = crypto.randomUUID().slice(0, 8);
     const now = new Date().toISOString();
 
-    const isAutoReview = task.reviewType === "auto";
+    // Quiz and auto-review tasks are approved immediately on submission
+    const isAutoApprove = task.reviewType === "auto" || task.taskType === "quiz";
 
     await db.insert(taskSubmissions).values({
       id: submissionId,
@@ -76,14 +78,14 @@ export async function POST(
       fileUrl: v.data.file_url || null,
       fileName: v.data.file_name || null,
       linkUrl: v.data.link_url || null,
-      status: isAutoReview ? "approved" : "submitted",
-      score: isAutoReview ? task.maxScore : null,
+      status: isAutoApprove ? "approved" : "submitted",
+      score: isAutoApprove ? task.maxScore : null,
       submittedAt: now,
       updatedAt: now,
     });
 
     // Auto-approve: create a review record
-    if (isAutoReview) {
+    if (isAutoApprove) {
       await db.insert(taskReviews).values({
         id: crypto.randomUUID().slice(0, 8),
         submissionId,
@@ -104,7 +106,67 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ id: submissionId, status: isAutoReview ? "approved" : "submitted" }, { status: 201 });
+    // Stage advancement for auto-approved tasks
+    if (isAutoApprove) {
+      try {
+        const stageId = task.stageId;
+        const stageTasks = await db
+          .select()
+          .from(journeyTasks)
+          .where(and(eq(journeyTasks.stageId, stageId), eq(journeyTasks.isRequired, 1)));
+
+        // Exclude material/video (view-only) from required check
+        const submittableRequired = stageTasks.filter(
+          (t) => t.taskType !== "material" && t.taskType !== "video"
+        );
+
+        const userSubs = await db
+          .select()
+          .from(taskSubmissions)
+          .where(
+            and(
+              eq(taskSubmissions.instanceId, id),
+              eq(taskSubmissions.userId, auth.user.id),
+              eq(taskSubmissions.status, "approved")
+            )
+          );
+
+        const approvedIds = new Set(userSubs.map((s) => s.taskId));
+        const allDone = submittableRequired.every((t) => approvedIds.has(t.id));
+
+        if (allDone) {
+          const stage = await db.query.journeyStages.findFirst({
+            where: eq(journeyStages.id, stageId),
+          });
+          if (stage) {
+            const allStages = await db
+              .select()
+              .from(journeyStages)
+              .where(eq(journeyStages.journeyId, instance.journeyId))
+              .orderBy(asc(journeyStages.sortOrder));
+
+            const idx = allStages.findIndex((s) => s.id === stageId);
+            const nextStage = allStages[idx + 1];
+
+            if (nextStage) {
+              await db
+                .update(journeyParticipants)
+                .set({ currentStageId: nextStage.id })
+                .where(and(eq(journeyParticipants.instanceId, id), eq(journeyParticipants.userId, auth.user.id)));
+            } else {
+              await db
+                .update(journeyParticipants)
+                .set({ status: "completed", completedAt: now })
+                .where(and(eq(journeyParticipants.instanceId, id), eq(journeyParticipants.userId, auth.user.id)));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Stage advancement failed:", err);
+      }
+    }
+
+    return NextResponse.json({ id: submissionId, status: isAutoApprove ? "approved" : "submitted" }, { status: 201 });
   } catch (error) {
     console.error("Failed to submit task:", error);
     return NextResponse.json({ error: "Failed to submit task" }, { status: 500 });
