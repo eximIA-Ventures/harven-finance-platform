@@ -97,6 +97,7 @@ export default function TaskViewPage() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [taskInputs, setTaskInputs] = useState<Record<string, { content: string; link_url: string; file_url: string; file_name: string }>>({});
+  const [quizFiles, setQuizFiles] = useState<Record<string, { url: string; name: string }[]>>({});
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -148,17 +149,39 @@ export default function TaskViewPage() {
     setTaskInputs(prev => ({ ...prev, [taskId]: { ...getInput(taskId), [field]: value } }));
   };
 
+  const getQuizFiles = (taskId: string) => quizFiles[taskId] || [];
+  const handleQuizFileUpload = async (taskId: string, file: File) => {
+    setUploading(taskId);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload/journey", { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        setQuizFiles(prev => ({ ...prev, [taskId]: [...(prev[taskId] || []), { url: data.url, name: data.fileName }] }));
+      }
+    } catch { /* silent */ }
+    finally { setUploading(null); }
+  };
+  const removeQuizFile = (taskId: string, idx: number) => {
+    setQuizFiles(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter((_, i) => i !== idx) }));
+  };
+
   const handleSubmit = async (task: TaskStatus) => {
     const input = getInput(task.taskId);
     setSubmitting(task.taskId);
     try {
       const body: Record<string, unknown> = { task_id: task.taskId };
       if (task.taskType === "text" || task.taskType === "attendance" || task.taskType === "quiz") body.content = input.content || null;
-      if (task.taskType === "quiz" && input.file_url) { body.file_url = input.file_url; body.file_name = input.file_name || "prova-foto"; }
+      const qFiles = getQuizFiles(task.taskId);
+      if (task.taskType === "quiz" && qFiles.length > 0) {
+        body.file_url = JSON.stringify(qFiles.map(f => f.url));
+        body.file_name = qFiles.map(f => f.name).join(", ");
+      }
       if (task.taskType === "link") body.link_url = input.link_url;
       if (task.taskType === "file") { body.file_url = input.file_url; body.file_name = input.file_url.split("/").pop() || "arquivo"; }
       const res = await fetch(`/api/journey-instances/${instanceId}/submit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (res.ok) { setTaskInputs(prev => { const next = { ...prev }; delete next[task.taskId]; return next; }); setRetakingQuiz(prev => { const n = new Set(prev); n.delete(task.taskId); return n; }); await fetchProgress(); }
+      if (res.ok) { setTaskInputs(prev => { const next = { ...prev }; delete next[task.taskId]; return next; }); setQuizFiles(prev => { const next = { ...prev }; delete next[task.taskId]; return next; }); setRetakingQuiz(prev => { const n = new Set(prev); n.delete(task.taskId); return n; }); await fetchProgress(); }
     } catch { /* silent */ }
     finally { setSubmitting(null); }
   };
@@ -631,26 +654,25 @@ export default function TaskViewPage() {
                             })}
                           </div>
                         )}
-                        {/* Quiz — file/photo upload option (for paper-based answers) */}
+                        {/* Quiz — multi file/photo upload (for paper-based answers) */}
                         {task.taskType === "quiz" && (
                           <div className="space-y-2">
-                            <span className="text-[10px] uppercase tracking-wider text-dim">Ou envie foto/arquivo da prova em papel</span>
-                            {input.file_url ? (
-                              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)]">
+                            <span className="text-[10px] uppercase tracking-wider text-dim">Ou envie fotos/arquivos da prova em papel</span>
+                            {getQuizFiles(task.taskId).map((f, fIdx) => (
+                              <div key={fIdx} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-bg-elevated ring-1 ring-[var(--border-color)]">
                                 <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
-                                <span className="text-xs text-cream flex-1 truncate">{input.file_name || "Arquivo enviado"}</span>
-                                <button onClick={() => { setInput(task.taskId, "file_url", ""); setInput(task.taskId, "file_name", ""); }} className="p-1 text-dim hover:text-red-400 transition-colors">
+                                <span className="text-xs text-cream flex-1 truncate">{f.name}</span>
+                                <button onClick={() => removeQuizFile(task.taskId, fIdx)} className="p-1 text-dim hover:text-red-400 transition-colors">
                                   <X className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                            ) : (
-                              <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[var(--border-color)] text-sm text-dim hover:text-cream hover:border-accent/30 transition-colors cursor-pointer ${uploading === task.taskId ? "opacity-50" : ""}`}>
-                                {uploading === task.taskId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                                {uploading === task.taskId ? "Enviando..." : "Enviar foto ou arquivo"}
-                                <input type="file" className="hidden" accept="image/*,.pdf,.jpg,.jpeg,.png,.heic" disabled={uploading === task.taskId}
-                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(task.taskId, f); e.target.value = ""; }} />
-                              </label>
-                            )}
+                            ))}
+                            <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[var(--border-color)] text-sm text-dim hover:text-cream hover:border-accent/30 transition-colors cursor-pointer ${uploading === task.taskId ? "opacity-50" : ""}`}>
+                              {uploading === task.taskId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                              {uploading === task.taskId ? "Enviando..." : "Adicionar foto ou arquivo"}
+                              <input type="file" className="hidden" accept="image/*,.pdf,.jpg,.jpeg,.png,.heic" disabled={uploading === task.taskId}
+                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleQuizFileUpload(task.taskId, f); e.target.value = ""; }} />
+                            </label>
                           </div>
                         )}
                         {task.taskType === "quiz" && !cfg?.questions && !input.file_url && (
@@ -730,7 +752,7 @@ export default function TaskViewPage() {
                         {/* Submit button */}
                         {!(task.taskType === "link" && cfg?.completionType === "confirm") && ["text", "link", "file", "checklist", "attendance", "quiz"].includes(task.taskType) && (
                           <div className="flex justify-end">
-                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content) || (task.taskType === "quiz" && !input.content && !input.file_url)}
+                            <button onClick={() => handleSubmit(task)} disabled={isSubmittingThis || (task.taskType === "text" && !input.content) || (task.taskType === "link" && !input.link_url) || (task.taskType === "file" && !input.file_url) || (task.taskType === "checklist" && !input.content) || (task.taskType === "attendance" && !input.content) || (task.taskType === "quiz" && !input.content && getQuizFiles(task.taskId).length === 0)}
                               className="px-4 py-2 bg-accent text-white rounded-xl text-sm font-medium hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2">
                               {isSubmittingThis ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
                             </button>

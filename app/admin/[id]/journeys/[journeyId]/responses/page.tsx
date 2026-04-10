@@ -413,18 +413,21 @@ export default function ResponsesPage() {
                                         </div>
                                       )}
 
-                                      {/* File */}
+                                      {/* File(s) */}
                                       {sub.fileUrl && (
-                                        <div className="ml-10 flex items-center gap-2">
-                                          <a
-                                            href={sub.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-1.5 text-xs text-accent hover:underline"
-                                          >
-                                            <Download className="w-3 h-3" />
-                                            {sub.fileName || "Arquivo"}
-                                          </a>
+                                        <div className="ml-10 flex flex-wrap items-center gap-2">
+                                          {(() => {
+                                            let urls: string[] = [];
+                                            try { urls = JSON.parse(sub.fileUrl); } catch { urls = [sub.fileUrl]; }
+                                            const names = (sub.fileName || "").split(", ");
+                                            return urls.map((url, fIdx) => (
+                                              <a key={fIdx} href={url} target="_blank" rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 text-xs text-accent hover:underline px-2 py-1 rounded-lg bg-accent/5">
+                                                <Download className="w-3 h-3" />
+                                                {names[fIdx] || `Arquivo ${fIdx + 1}`}
+                                              </a>
+                                            ));
+                                          })()}
                                         </div>
                                       )}
 
