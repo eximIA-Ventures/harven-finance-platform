@@ -272,10 +272,10 @@ export const createInstanceSchema = z.object({
 
 export const submitJourneyTaskSchema = z.object({
   task_id: z.string().min(1),
-  content: z.string().optional(),
-  file_url: z.string().optional(),
-  file_name: z.string().optional(),
-  link_url: z.string().optional(),
+  content: z.string().nullable().optional(),
+  file_url: z.string().nullable().optional(),
+  file_name: z.string().nullable().optional(),
+  link_url: z.string().nullable().optional(),
 });
 
 export const reviewSubmissionSchema = z.object({
